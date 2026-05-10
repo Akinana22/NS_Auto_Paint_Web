@@ -1,5 +1,5 @@
 """
-图像处理管线 v2.3.1
+图像处理管线 v2.3.2
 新管线: crop -> pixelize -> quantize -> json
 旧管线: 保留 pixelate_image_simple 用于第三方 JSON 导入（预设色板判断）
 """

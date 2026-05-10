@@ -1,5 +1,5 @@
 """
-色彩量化模块 v2.3.1
+色彩量化模块 v2.3.2
 PNG-8 风格: Median Cut、无仿色、全透/全不透、无半透明、无杂边。
 """
 
@@ -21,7 +21,7 @@ def quantize(image: Image.Image, max_colors: int):
     qi = rgb_img.quantize(colors=max_colors, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE)
 
     pr = qi.getpalette()
-    palette = [[pr[i * 3], pr[i * 3 + 1], pr[i * 3 + 2]] for i in range(256)]
+    palette = [[pr[i * 3], pr[i * 3 + 1], pr[i * 3 + 2]] for i in range(len(pr) // 3)]
 
     qa = np.array(qi).astype(np.int16)
     matrix = np.full((h, w), -1, dtype=np.int16)

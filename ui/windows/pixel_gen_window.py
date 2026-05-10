@@ -1,5 +1,5 @@
 """
-像素图生成窗口 v2.3.1
+像素图生成窗口 v2.3.2
 全新管线: 上传 → 裁切 → 像素化 → 限制色彩 → 生成JSON → 渲染JSON
 支持第三方 JSON 导入及画布模式。
 """
@@ -9,7 +9,7 @@ import numpy as np
 from PIL import Image
 
 from PySide6.QtWidgets import (
-    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QApplication,
     QGroupBox, QPushButton, QLabel, QSlider, QFileDialog,
     QTextEdit, QMessageBox, QComboBox, QSizePolicy, QStackedWidget,
 )
@@ -42,12 +42,10 @@ class MainPage(QWidget):
         self.json_metadata = {}
         self.json_file_path = None
 
-        self.brush_type = "smooth"
+        self.brush_type = "pixel"
         self.brush_size = 1
-        self.smooth_sizes = [1, 3, 7, 13, 19, 27]
-        self.pixel_sizes = [4, 8, 16, 32]
-        self.current_brush_sizes = self.smooth_sizes
         self.press_data = None
+        self._block_grid = None
 
         self.canvas_mode = "standard"
         self.canvas_mode_names = {
@@ -72,6 +70,10 @@ class MainPage(QWidget):
         self._pipeline_json = None
         self._crop_offset_x = 0
         self._crop_offset_y = 0
+        self._pixel_block_size = 0
+        self._last_quantized_color_index = -1
+        self._gen_block_size = -1
+        self._gen_color_index = -1
 
         self.setup_ui()
         self.apply_style()
@@ -101,20 +103,10 @@ class MainPage(QWidget):
         self._preview_group.setFont(f)
         preview_layout = QVBoxLayout()
         self.canvas_preview = CanvasPreview()
-        self.canvas_preview.setMinimumSize(256, 256)
+        self.canvas_preview.setMinimumSize(1, 1)
         preview_layout.addWidget(self.canvas_preview, 1)
         self._preview_group.setLayout(preview_layout)
         middle_panel.addWidget(self._preview_group)
-
-        action_layout = QHBoxLayout()
-        self.btn_export = QPushButton("\U0001f4be 导出")
-        self.btn_export.setEnabled(False)
-        self.btn_confirm = QPushButton("\U0001f4cc 定稿")
-        self.btn_confirm.setEnabled(False)
-        self.btn_confirm.setObjectName("confirm_btn")
-        action_layout.addWidget(self.btn_export)
-        action_layout.addWidget(self.btn_confirm)
-        middle_panel.addLayout(action_layout)
 
         # ========== RIGHT ==========
         right_panel = QVBoxLayout()
@@ -128,6 +120,7 @@ class MainPage(QWidget):
         self.canvas_mode_combo = QComboBox()
         self.canvas_mode_combo.addItems(["标准", "书籍", "电视", "游戏", "装修"])
         self.canvas_mode_combo.setCurrentIndex(0)
+        self.canvas_mode_combo.setEnabled(False)
         self.canvas_mode_combo.currentIndexChanged.connect(self._on_canvas_mode_changed)
         cl.addWidget(self.canvas_mode_combo)
         img_layout.addLayout(cl)
@@ -146,19 +139,36 @@ class MainPage(QWidget):
         _color_row.setSpacing(0)
         _color_row.addWidget(self.color_count_label)
         _color_row.addWidget(self.color_slider)
-        img_layout.addLayout(_color_row)
+
+        self._block_sizes = [1, 3, 4, 7, 8, 13, 16, 19, 27, 32]
+        self._block_size = 1
+        self.block_size_label = QLabel("最小像素块大小: 1")
+        self.block_size_slider_img = QSlider(Qt.Horizontal)
+        self.block_size_slider_img.setRange(0, len(self._block_sizes) - 1)
+        self.block_size_slider_img.setValue(0)
+        self.block_size_slider_img.setTickPosition(QSlider.TicksBelow)
+        self.block_size_slider_img.setTickInterval(1)
+        self.block_size_slider_img.setPageStep(1)
+        self.block_size_slider_img.setSingleStep(1)
+        self.block_size_slider_img.valueChanged.connect(self._on_block_size_changed)
+        _block_row = QVBoxLayout()
+        _block_row.setSpacing(0)
+        _block_row.addWidget(self.block_size_label)
+        _block_row.addWidget(self.block_size_slider_img)
 
         self.btn_upload = QPushButton("\U0001f4c1 上传图片")
         self.btn_crop = QPushButton("\u2702\ufe0f 裁切")
-        self.btn_pixelize = QPushButton("\U0001f532 像素化")
-        self.btn_limit_colors = QPushButton("\U0001f3a8 限制色彩")
         self.btn_crop.setEnabled(False)
+        self.btn_pixelize = QPushButton("\U0001f532 像素化")
         self.btn_pixelize.setEnabled(False)
+        self.btn_limit_colors = QPushButton("\U0001f3a8 限制色彩")
         self.btn_limit_colors.setEnabled(False)
 
         img_layout.addWidget(self.btn_upload)
         img_layout.addWidget(self.btn_crop)
+        img_layout.addLayout(_block_row)
         img_layout.addWidget(self.btn_pixelize)
+        img_layout.addLayout(_color_row)
         img_layout.addWidget(self.btn_limit_colors)
 
         img_group.setLayout(img_layout)
@@ -171,33 +181,6 @@ class MainPage(QWidget):
         json_group = QGroupBox("\U0001f4c4 JSON处理")
         json_layout = QVBoxLayout()
 
-        bl = QHBoxLayout()
-        self.btn_smooth_brush = QPushButton("顺滑画笔")
-        self.btn_pixel_brush = QPushButton("像素画笔")
-        bl.addWidget(self.btn_smooth_brush)
-        bl.addWidget(self.btn_pixel_brush)
-        json_layout.addLayout(bl)
-
-        self.btn_smooth_brush.setProperty("active", True)
-        self.btn_pixel_brush.setProperty("active", False)
-        self.btn_smooth_brush.setEnabled(False)
-        self.btn_pixel_brush.setEnabled(True)
-
-        self.brush_size_label = QLabel("笔尖大小: 1")
-        self.brush_size_slider = QSlider(Qt.Horizontal)
-        self.brush_size_slider.setRange(0, len(self.current_brush_sizes) - 1)
-        self.brush_size_slider.setValue(0)
-        self.brush_size_slider.setTickPosition(QSlider.TicksBelow)
-        self.brush_size_slider.setTickInterval(1)
-        self.brush_size_slider.setPageStep(1)
-        self.brush_size_slider.setSingleStep(1)
-        self.brush_size_slider.valueChanged.connect(self._on_brush_size_changed)
-        _brush_row = QVBoxLayout()
-        _brush_row.setSpacing(0)
-        _brush_row.addWidget(self.brush_size_label)
-        _brush_row.addWidget(self.brush_size_slider)
-        json_layout.addLayout(_brush_row)
-
         gr = QHBoxLayout()
         self.btn_generate_json = QPushButton("\U0001f4dd 生成JSON")
         self.btn_upload_json = QPushButton("\U0001f4c1 上传JSON")
@@ -206,13 +189,23 @@ class MainPage(QWidget):
         gr.addWidget(self.btn_upload_json)
         json_layout.addLayout(gr)
 
-        self.btn_render_json = QPushButton("\u2699\ufe0f 渲染JSON")
-        self.btn_render_json.setEnabled(False)
-        json_layout.addWidget(self.btn_render_json)
+        self.json_status_label = QLabel("")
+        self.json_status_label.setWordWrap(True)
+        self.json_status_label.setStyleSheet("font-size: 11px; color: #333; background: transparent; padding: 2px;")
+        json_layout.addWidget(self.json_status_label)
+
+        action_layout = QHBoxLayout()
+        self.btn_export = QPushButton("\U0001f4be 导出")
+        self.btn_export.setEnabled(False)
+        self.btn_confirm = QPushButton("\U0001f4cc 定稿")
+        self.btn_confirm.setEnabled(False)
+        self.btn_confirm.setObjectName("confirm_btn")
+        action_layout.addWidget(self.btn_export)
+        action_layout.addWidget(self.btn_confirm)
+        json_layout.addLayout(action_layout)
 
         json_group.setLayout(json_layout)
-        right_panel.addWidget(json_group)
-        right_panel.addStretch()
+        right_panel.addWidget(json_group, 1)
 
         main_layout.addLayout(left_panel, 2)
         main_layout.addLayout(middle_panel, 3)
@@ -258,25 +251,32 @@ class MainPage(QWidget):
         self.btn_limit_colors.clicked.connect(self.on_limit_colors)
         self.btn_export.clicked.connect(self.on_export)
         self.btn_confirm.clicked.connect(self.on_confirm)
-        self.btn_smooth_brush.clicked.connect(self._on_smooth_mode)
-        self.btn_pixel_brush.clicked.connect(self._on_pixel_mode)
         self.btn_upload_json.clicked.connect(self.on_upload_json)
-        self.btn_render_json.clicked.connect(self.on_render_json)
         self.btn_generate_json.clicked.connect(self.on_generate_json)
         self.btn_open_website.clicked.connect(self.on_open_pixel_website)
 
     def _on_color_slider_changed(self, v):
         if 0 <= v < len(self._color_values):
             self.color_count_label.setText(f"最大颜色数: {self._color_values[v]}")
+        self._update_stage_buttons()
 
     # ========== 管线 ==========
 
     def _update_stage_buttons(self):
         s = self._pipeline_stage
-        self.btn_crop.setEnabled(s >= 1)
-        self.btn_pixelize.setEnabled(s >= 2)
-        self.btn_limit_colors.setEnabled(s >= 3)
-        self.btn_generate_json.setEnabled(s >= 4)
+        ci = self.color_slider.value()
+        self.btn_crop.setEnabled(s == 1)
+        self.btn_pixelize.setEnabled(s >= 2 and self._block_size != self._pixel_block_size)
+        self.btn_limit_colors.setEnabled(
+            s >= 3 and (self._last_quantized_color_index < 0
+                        or ci != self._last_quantized_color_index)
+        )
+        self.btn_generate_json.setEnabled(
+            s >= 4 and self._last_quantized_color_index >= 0 and (
+                self._pixel_block_size != self._gen_block_size
+                or self._last_quantized_color_index != self._gen_color_index
+            )
+        )
 
     def _update_preview_title(self):
         mode = get_canvas_mode(self.canvas_mode)
@@ -296,6 +296,7 @@ class MainPage(QWidget):
         self._orig_image_path = path
         self._pipeline_stage = 1
         self._update_stage_buttons()
+        self.canvas_mode_combo.setEnabled(True)
         self._update_preview_title()
         img = Image.open(path).convert("RGBA")
         self.canvas_preview.setSourceImage(img, self.canvas_mode)
@@ -307,10 +308,18 @@ class MainPage(QWidget):
         if fitted is None:
             return
         l, t, r, b = self.canvas_preview.getCropPixels()
-        self._cropped_image = fitted.crop((l, t, r, b))
+        ox, oy = self.canvas_preview.getPasteOffset()
+        from core.models.canvas_mode import get_canvas_mode
+        mode = get_canvas_mode(self.canvas_mode)
+        result = Image.new("RGBA", (mode.active_w, mode.active_h), (0, 0, 0, 0))
+        if r > l and b > t:
+            region = fitted.crop((l, t, r, b))
+            result.paste(region, (ox, oy))
+        self._cropped_image = result
         self.log(f"[裁切] fitted={fitted.size} crop=({l},{t},{r},{b}) result={self._cropped_image.size}")
         self._pipeline_stage = 2
         self._update_stage_buttons()
+        self.canvas_mode_combo.setEnabled(False)
         buf = self._cropped_image.tobytes("raw", "RGBA")
         qi = QImage(buf, self._cropped_image.width, self._cropped_image.height, QImage.Format_RGBA8888)
         self._current_preview_pixmap = QPixmap.fromImage(qi)
@@ -322,12 +331,16 @@ class MainPage(QWidget):
         self.log(f"裁切完成: {self._cropped_image.width}x{self._cropped_image.height}")
 
     def on_pixelize(self):
-        from core.image.pixelize import pixelize
+        from core.image.pixelize import pixelize_to_blocks
         if self._cropped_image is None:
             return
-        self._pixelized_image = pixelize(self._cropped_image, self.brush_type, self.brush_size)
+        self._pixelized_image, self._block_grid = pixelize_to_blocks(
+            self._cropped_image, self.canvas_mode, self._block_size)
+        self._pixel_block_size = self._block_size
+        self._last_quantized_color_index = -1
         self._pipeline_stage = 3
         self._update_stage_buttons()
+        self.log(f"[像素化] block={self._pixel_block_size}")
         buf = self._pixelized_image.tobytes("raw", "RGBA")
         qi = QImage(buf, self._pixelized_image.width, self._pixelized_image.height, QImage.Format_RGBA8888)
         self._current_preview_pixmap = QPixmap.fromImage(qi)
@@ -344,7 +357,9 @@ class MainPage(QWidget):
         self._pipeline_palette = pal
         self._pipeline_matrix = mat
         self._pipeline_stage = 4
+        self._last_quantized_color_index = self.color_slider.value()
         self._update_stage_buttons()
+        self.log(f"[限制色彩] color_index={self._last_quantized_color_index} value={mc}")
         buf = qi_img.tobytes("raw", "RGBA")
         qi = QImage(buf, qi_img.width, qi_img.height, QImage.Format_RGBA8888)
         self._current_preview_pixmap = QPixmap.fromImage(qi)
@@ -352,14 +367,13 @@ class MainPage(QWidget):
         self.log(f"限制色彩完成: {len(pal)} 色")
 
     def on_generate_json(self):
-        from core.image.json_builder import matrix_to_json
-        if self._pipeline_matrix is None or self._pipeline_palette is None:
+        from core.image.json_builder import grid_to_json
+        if self._block_grid is None or self._pipeline_palette is None:
             return
-        jd = matrix_to_json(self._pipeline_matrix, self._pipeline_palette,
-                           self.canvas_mode, self.brush_type, self.brush_size)
-        self._pipeline_json = jd
-        self.color_index_matrix = np.asarray(self._pipeline_matrix, dtype=np.int16)
-        self.color_palette = self._pipeline_palette
+        self.json_status_label.setText("\u6b63\u5728\u6784\u5efaJSON\u2026")
+        QApplication.processEvents()
+        jd = grid_to_json(self._block_grid, self._pipeline_palette,
+                         self.canvas_mode, "pixel", self._pixel_block_size, is_local=True)
 
         scripts_dir = os.path.join(
             os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "scripts")
@@ -369,60 +383,47 @@ class MainPage(QWidget):
         with open(json_path, "w", encoding="utf-8") as fout:
             json.dump(jd, fout, ensure_ascii=False, indent=2)
 
-        self.json_file_path = json_path
-        self.json_loaded = True
-        self.json_matrix = np.asarray(self._pipeline_matrix, dtype=np.int16)
-        self.json_palette = self._pipeline_palette
-        self.drawing_mode = "json"
-        self.generated_is_preset = False
-        self.press_data = [c["press"] for c in jd["palette"]]
-
+        self._gen_block_size = self._pixel_block_size
+        self._gen_color_index = self._last_quantized_color_index
+        self.log(f"[生成JSON] block={self._gen_block_size} color_index={self._gen_color_index}")
         self._pipeline_stage = 5
         self._update_stage_buttons()
-        self.btn_render_json.setEnabled(True)
-        self.btn_export.setEnabled(True)
-        self.btn_confirm.setEnabled(True)
         self._update_preview_title()
         self.log(f"JSON已生成: {json_path}")
+        self._load_json_and_render(json_path)
 
-    # ========== 第三方 JSON ==========
+    def _load_json_and_render(self, path):
+        self.json_file_path = path
+        # 先读 brush 确保 import 用正确的像素块参数
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                raw = json.load(f)
+            brush = raw.get("brush", {})
+            self.brush_type = brush.get("mode", "pixel")
+            self.brush_size = brush.get("px", 1)
+        except Exception:
+            pass
+        self.json_status_label.setText("\u6b63\u5728\u5bfc\u5165JSON\u2026")
+        QApplication.processEvents()
+        self._import_json_with_current_settings()
+        if not self.json_loaded:
+            return
+        if self.json_metadata:
+            self._apply_json_canvas_settings(self.json_metadata)
+        self.log(f"\u5df2\u5bfc\u5165 JSON: {os.path.basename(self.json_file_path)}")
+        self.logger.info(f"JSON: {os.path.basename(self.json_file_path)}")
+        self.json_status_label.setText("\u6b63\u5728\u6e32\u67d3JSON\u2026")
+        QApplication.processEvents()
+        self._update_preview_from_matrix()
+        self._update_json_status()
+        self.btn_export.setEnabled(True)
+        self.btn_confirm.setEnabled(True)
 
     def on_upload_json(self):
-        file_path, _ = QFileDialog.getOpenFileName(self, "选择 JSON 文件", "", "JSON 文件 (*.json)")
+        file_path, _ = QFileDialog.getOpenFileName(self, "\u9009\u62e9 JSON \u6587\u4ef6", "", "JSON \u6587\u4ef6 (*.json)")
         if not file_path:
             return
-        self.json_file_path = file_path
-        self._import_json_with_current_settings()
-        if self.json_metadata:
-            self._apply_json_brush_settings(self.json_metadata)
-            self._apply_json_canvas_settings(self.json_metadata)
-        self.log(f"已上传 JSON: {os.path.basename(self.json_file_path)}")
-        self.log(f"  画笔: {self.brush_type} {self.brush_size}px, 尺寸: {self.json_metadata['width']}x{self.json_metadata['height']}")
-        self.logger.info(f"上传 JSON: {os.path.basename(self.json_file_path)}")
-
-    def _apply_json_brush_settings(self, metadata: dict):
-        json_brush_type = metadata.get("json_brush_type")
-        json_brush_size = metadata.get("json_brush_size")
-        if json_brush_type is None or json_brush_size is None:
-            return
-        if json_brush_type == "smooth":
-            if json_brush_size not in self.smooth_sizes:
-                self.logger.warning(f"不支持的顺滑画笔尺寸（JSON）: {json_brush_size}")
-                return
-            self._on_smooth_mode()
-            idx = self.smooth_sizes.index(json_brush_size)
-            self.brush_size_slider.setValue(idx)
-            self.brush_size = json_brush_size
-            self.brush_size_label.setText(f"笔尖大小: {json_brush_size}")
-        elif json_brush_type == "pixel":
-            if json_brush_size not in self.pixel_sizes:
-                self.logger.warning(f"不支持的像素画笔尺寸（JSON）: {json_brush_size}")
-                return
-            self._on_pixel_mode()
-            idx = self.pixel_sizes.index(json_brush_size)
-            self.brush_size_slider.setValue(idx)
-            self.brush_size = json_brush_size
-            self.brush_size_label.setText(f"笔尖大小: {json_brush_size}")
+        self._load_json_and_render(file_path)
 
     def _apply_json_canvas_settings(self, metadata: dict):
         canvas_mode_key = metadata.get("canvas_mode")
@@ -448,9 +449,6 @@ class MainPage(QWidget):
         self.json_palette = palette
         self.json_metadata = metadata
         self.json_loaded = True
-        self.btn_render_json.setEnabled(True)
-        self.press_data = metadata.get("press_data")
-        self.drawing_mode = "json"
         self.generated_is_preset = metadata.get("all_preset", False)
         self.log(f"JSON 导入完成，有效像素数: {metadata['total_pixels']}")
         self.logger.info(f"渲染 JSON: {os.path.basename(self.json_file_path)}")
@@ -600,45 +598,7 @@ class MainPage(QWidget):
         msg_box.setMinimumWidth(550)
         return msg_box.exec() == QMessageBox.Yes
 
-    # ========== brush / canvas utils ==========
-
-    def _on_smooth_mode(self):
-        self.brush_type = "smooth"
-        self.current_brush_sizes = self.smooth_sizes
-        old_value = min(self.brush_size_slider.value(), len(self.smooth_sizes) - 1)
-        self.brush_size_slider.setRange(0, len(self.smooth_sizes) - 1)
-        self.brush_size_slider.setValue(old_value)
-        self.brush_size = self.smooth_sizes[old_value]
-        self.brush_size_label.setText(f"笔尖大小: {self.brush_size}")
-        self.btn_smooth_brush.setProperty("active", True)
-        self.btn_pixel_brush.setProperty("active", False)
-        self.btn_smooth_brush.setEnabled(False)
-        self.btn_pixel_brush.setEnabled(True)
-        self._restyle_buttons()
-
-    def _on_pixel_mode(self):
-        self.brush_type = "pixel"
-        self.current_brush_sizes = self.pixel_sizes
-        old_value = min(self.brush_size_slider.value(), len(self.pixel_sizes) - 1)
-        self.brush_size_slider.setRange(0, len(self.pixel_sizes) - 1)
-        self.brush_size_slider.setValue(old_value)
-        self.brush_size = self.pixel_sizes[old_value]
-        self.brush_size_label.setText(f"笔尖大小: {self.brush_size}")
-        self.btn_smooth_brush.setProperty("active", False)
-        self.btn_pixel_brush.setProperty("active", True)
-        self.btn_smooth_brush.setEnabled(True)
-        self.btn_pixel_brush.setEnabled(False)
-        self._restyle_buttons()
-
-    def _restyle_buttons(self):
-        for btn in [self.btn_smooth_brush, self.btn_pixel_brush]:
-            btn.style().unpolish(btn)
-            btn.style().polish(btn)
-
-    def _on_brush_size_changed(self, idx):
-        if 0 <= idx < len(self.current_brush_sizes):
-            self.brush_size = self.current_brush_sizes[idx]
-            self.brush_size_label.setText(f"笔尖大小: {self.brush_size}")
+    # ========== canvas utils ==========
 
     def _on_canvas_mode_changed(self, idx):
         modes = list(self.canvas_mode_names.keys())
@@ -646,6 +606,53 @@ class MainPage(QWidget):
             self.canvas_mode = modes[idx]
             self.canvas_preview.setCanvasMode(self.canvas_mode)
             self._update_preview_title()
+
+    def _update_json_status(self):
+        if not self.json_loaded:
+            self.json_status_label.setText("")
+            return
+        mode = get_canvas_mode(self.canvas_mode)
+
+        if self.json_metadata:
+            md = self.json_metadata
+            src = md.get("source", "unknown")
+            grid_w = md.get("width", "?")
+            grid_h = md.get("height", "?")
+            bt = md.get("json_brush_type", self.brush_type)
+            bs = md.get("json_brush_size", self.brush_size)
+            n_colors = md.get("palette_size", "?")
+        elif self._pipeline_json:
+            jd = self._pipeline_json
+            src = jd.get("source", "ns_auto_paint")
+            grid_w = jd.get("width", "?")
+            grid_h = jd.get("height", "?")
+            bt = jd["brush"]["mode"] if "brush" in jd else self.brush_type
+            bs = jd["brush"]["px"] if "brush" in jd else self.brush_size
+            n_colors = len(jd.get("palette", []))
+        else:
+            self.json_status_label.setText("")
+            return
+
+        cname = self.canvas_mode_names.get(self.canvas_mode, self.canvas_mode)
+        parts = os.path.normpath(self.json_file_path).split(os.sep) if self.json_file_path else []
+        short_path = os.sep.join(parts[-2:]) if len(parts) >= 2 else (parts[-1] if parts else "")
+        status = (
+            f"\u6587\u4ef6\u6765\u6e90: {src}\n"
+            f"\u6587\u4ef6\u8def\u5f84: {short_path}\n"
+            f"\u7f51\u683c\u5927\u5c0f: {grid_w}\u00d7{grid_h}\n"
+            f"\u753b\u5e03\u7c7b\u578b: {cname} {mode.active_w}\u00d7{mode.active_h}\n"
+            f"\u7b14\u5c16\u7c7b\u578b: {bt}\n"
+            f"\u6700\u5c0f\u50cf\u7d20: {bs}px\n"
+            f"\u989c\u8272\u6570\u91cf: {n_colors}"
+        )
+        self.json_status_label.setText(status)
+
+    def _on_block_size_changed(self, idx):
+        if 0 <= idx < len(self._block_sizes):
+            self._block_size = self._block_sizes[idx]
+            self.block_size_label.setText(f"最小像素块大小: {self._block_size}")
+            self._update_stage_buttons()
+            self.log(f"[滑块] block_size={self._block_size}")
 
     def on_open_pixel_website(self):
         import webbrowser

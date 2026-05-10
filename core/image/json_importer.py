@@ -1,5 +1,5 @@
 """
-JSON 导入器 v2.3.0
+JSON 导入器 v2.3.2
 解析第三方像素画 JSON 文件（如 living-the-grid 格式），转换为内部格式。
 支持顺滑画笔和像素画笔两种模式，处理网格居中与缩放。
 适配新版 JSON 中的 press 对象（h/s/b 对应 ZR/方向键右/方向键上按下次数），
@@ -242,6 +242,7 @@ class JsonImporter:
 
         # 9. 构建元数据
         metadata = {
+            "source": data.get("source", ""),
             "width": width,
             "height": height,
             "brush_type": brush_type,

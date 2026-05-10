@@ -1,5 +1,5 @@
 """
-画布模式数据模型 v2.3.0
+画布模式数据模型 v2.3.2
 定义《朋友收集 梦想生活》中五种绘画模式的实际绘画区域与画笔起始位置。
 实际绘画区域限制落笔是否生效，不限制笔尖移动范围。
 """
@@ -57,7 +57,7 @@ CANVAS_MODES = {
     "tv": CanvasMode(
         name="电视",
         width=256, height=256,
-        active_x=0, active_y=62, active_w=256, active_h=131,
+        active_x=0, active_y=63, active_w=256, active_h=131,
         start_x=128, start_y=128,
     ),
     "game": CanvasMode(

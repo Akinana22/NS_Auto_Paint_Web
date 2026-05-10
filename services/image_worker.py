@@ -1,5 +1,5 @@
 """
-图像处理后台线程 v2.3.1
+图像处理后台线程 v2.3.2
 新管线 worker: crop -> pixelize -> quantize -> json
 旧 worker: ImageProcessWorkerPyx 保留用于第三方 JSON 兼容
 """
