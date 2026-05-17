@@ -1,0 +1,131 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: rgb(255, 191, 1);
+  --panel-bg: rgba(255, 255, 255, 0.85);
+  --text: #222;
+  --text-dim: #666;
+  --border: #ccc;
+  --highlight: #E60012;
+  --success: #16c79a;
+  --btn-bg: rgba(255, 255, 255, 0.9);
+  --btn-hover: rgba(255, 255, 255, 1);
+  --btn-disabled: rgba(200, 200, 200, 0.6);
+  --z-modal: 1000;
+  --overlay-dim: rgba(0,0,0,0.05);
+  --overlay-code: rgba(0,0,0,0.06);
+  --overlay-modal: rgba(0,0,0,0.4);
+  --space-sm: 4px;
+  --space-md: 8px;
+  --space-lg: 16px;
+  font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+  color: var(--text);
+  background: var(--bg);
+}
+body { min-height: 100vh; background: var(--bg); }
+#root { min-height: 100vh; display: flex; flex-direction: column; }
+
+.app { display: flex; flex-direction: column; min-height: 100vh; padding: var(--space-lg); gap: var(--space-lg); }
+
+.top-nav {
+  display: flex; gap: var(--space-sm);
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  backdrop-filter: blur(6px);
+  padding: var(--space-md) var(--space-lg);
+  min-width: var(--sw20, 320px);
+  max-width: var(--sw60);
+  margin: 0 auto;
+  width: 100%;
+}
+.top-nav a {
+  padding: var(--space-md) 18px; border-radius: 6px;
+  background: transparent; color: var(--text-dim);
+  text-decoration: none; font-size: 13px; font-weight: 600;
+  transition: all 0.2s;
+}
+.top-nav a.active { background: var(--highlight); color: #fff; }
+.top-nav a:hover:not(.active) { background: var(--overlay-dim); color: var(--text); }
+
+.main-content { flex: 1; display: flex; gap: var(--space-lg); overflow: hidden; }
+
+.panel {
+  background: var(--panel-bg); border-radius: 8px;
+  border: 1px solid var(--border); padding: var(--space-lg);
+  backdrop-filter: blur(6px);
+}
+.panel-header {
+  font-size: 16px; font-weight: 700; margin-bottom: 12px;
+  padding-bottom: var(--space-md); border-bottom: 1px solid var(--border);
+}
+
+.section-divider {
+  border-top: 1px solid var(--border);
+  padding-top: var(--space-md);
+  margin-top: var(--space-sm);
+}
+
+button {
+  background: var(--btn-bg); color: var(--text);
+  border: 1px solid var(--border); border-radius: 6px;
+  padding: var(--space-md) 18px; font-size: 13px; cursor: pointer;
+  transition: background 0.2s; font-family: inherit;
+}
+button:hover { background: var(--btn-hover); }
+button:disabled { opacity: 0.5; background: var(--btn-disabled); color: #888; cursor: not-allowed; }
+button.primary { background: var(--highlight); border-color: var(--highlight); color: #fff; }
+button.primary:disabled { background: #aaa; border-color: #aaa; color: #ddd; }
+button.success { background: var(--success); border-color: var(--success); color: #fff; }
+
+input[type="range"] { accent-color: var(--highlight); }
+select {
+  background: var(--btn-bg); color: var(--text);
+  border: 1px solid var(--border); border-radius: 6px;
+  padding: 6px 12px; font-size: 13px; font-family: inherit;
+}
+label { font-size: 13px; color: var(--text-dim); display: flex; align-items: center; gap: var(--space-md); }
+
+.canvas-preview { image-rendering: pixelated; border: 1px solid var(--border); border-radius: 4px; }
+
+.status-bar {
+  font-size: 12px; color: var(--text-dim);
+  padding: 6px 12px; background: var(--overlay-dim);
+  border-radius: 4px; margin-top: var(--space-md);
+}
+
+.flex-row { display: flex; align-items: center; gap: var(--space-md); }
+.flex-col { display: flex; flex-direction: column; gap: var(--space-md); }
+
+/* ---- page layout ---- */
+.page-box {
+  width: 100%;
+  min-width: var(--sw20);
+  max-width: var(--sw60);
+}
+.page-wrapper {
+  flex: 1; display: flex; justify-content: center;
+  min-height: 0;
+}
+.page-group {
+  width: 100%;
+}
+.page-group-flex {
+  width: 100%; display: flex; gap: var(--space-lg); flex-wrap: wrap;
+}
+.page-col {
+  flex: 1 1 1px;
+  min-width: var(--sw20);
+  max-width: var(--sw50);
+}
+.page-col-full {
+  flex: 1 1 1px;
+  min-width: var(--sw20);
+  max-width: var(--sw60);
+}
+
+.btn-row {
+  display: flex; gap: var(--space-md);
+}
+.btn-row > button {
+  flex: 1 1 0;
+}

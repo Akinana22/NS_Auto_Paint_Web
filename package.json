@@ -1,0 +1,5 @@
+{
+  "name": "ns-auto-paint-monorepo",
+  "private": true,
+  "workspaces": ["frontend", "shared"]
+}
