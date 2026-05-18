@@ -77,15 +77,17 @@ export function imageDataToCanvas(img: ImageData): HTMLCanvasElement {
 export function getCropOffset(
   fittedW: number, fittedH: number,
   canvasMode: string, offsetX: number, offsetY: number
-): { left: number; top: number; right: number; bottom: number } {
+): { left: number; top: number; right: number; bottom: number; ox: number; oy: number } {
   const mode = getCanvasMode(canvasMode);
   const left   = Math.max(0, Math.round((fittedW - mode.activeW) / 2 - offsetX));
   const top    = Math.max(0, Math.round((fittedH - mode.activeH) / 2 - offsetY));
+  const ox = Math.max(0, Math.round(mode.activeW / 2 - fittedW / 2 + offsetX));
+  const oy = Math.max(0, Math.round(mode.activeH / 2 - fittedH / 2 + offsetY));
   return {
-    left,
-    top,
+    left, top,
     right:  Math.min(fittedW, Math.round((fittedW + mode.activeW) / 2 - offsetX)),
     bottom: Math.min(fittedH, Math.round((fittedH + mode.activeH) / 2 - offsetY)),
+    ox, oy,
   };
 }
 

@@ -34,18 +34,13 @@
   document.querySelectorAll('.page-col, .page-col-full').forEach(function (el) {
     var cs = getComputedStyle(el);
     var actual = el.offsetWidth;
-    var isFull = el.classList.contains('page-col-full');
     var minW = px(root.getPropertyValue('--sw20').trim());
-    var maxW = px(root.getPropertyValue(isFull ? '--sw60' : '--sw50').trim());
-    var label = el.className.slice(0, 40) || (isFull ? 'page-col-full' : 'page-col');
+    var label = el.className.slice(0, 40);
     if (minW !== null && actual < minW - 1) {
       results.push({ element: label, expected: 'width >= ' + minW + 'px', actual: actual + 'px', result: 'FAIL' });
       fails++;
-    } else if (maxW !== null && actual > maxW + 1) {
-      results.push({ element: label, expected: 'width <= ' + maxW + 'px', actual: actual + 'px', result: 'FAIL' });
-      fails++;
     } else {
-      results.push({ element: label, expected: minW + 'px \u2013 ' + maxW + 'px', actual: actual + 'px', result: 'PASS' });
+      results.push({ element: label, expected: 'width >= ' + minW + 'px', actual: actual + 'px', result: 'PASS' });
       passes++;
     }
   });

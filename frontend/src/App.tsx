@@ -7,16 +7,10 @@ import SplatoonPage from './pages/SplatoonPage';
 function setLayoutVars() {
   const sw = window.screen.width;
   const isMobile = /Mobi|Android/i.test(navigator.userAgent);
+  const min20 = isMobile ? 320 : 400;
   const r = document.documentElement.style;
-  if (isMobile) {
-    r.setProperty('--sw20', '100%');
-    r.setProperty('--sw50', '100%');
-    r.setProperty('--sw60', '100%');
-  } else {
-    r.setProperty('--sw20', `${Math.round(sw * 0.2)}px`);
-    r.setProperty('--sw50', `${Math.round(sw * 0.5)}px`);
-    r.setProperty('--sw60', `${Math.round(sw * 0.6)}px`);
-  }
+  r.setProperty('--sw20', `${Math.max(Math.round(sw * 0.2), min20)}px`);
+  r.setProperty('--sw60', `${Math.max(Math.round(sw * 0.6), 720)}px`);
 }
 
 export default function App() {

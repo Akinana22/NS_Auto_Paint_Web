@@ -13,10 +13,15 @@ import { PicoSerial, crc32 } from '../serial/pico-flash';
 import { PixelJson, Palette, GridCell } from '../engine/types';
 import CropPreview from '../components/CropPreview';
 
-const CANVAS_MODE_NAMES: Record<string, string> = {
-  standard: '标准', book: '书籍', tv: '电视', game: '游戏', decoration: '装修',
-};
-const CANVAS_MODE_KEYS = ['standard', 'book', 'tv', 'game', 'decoration'];
+const CANVAS_MODE_OPTIONS: { key: string; label: string }[] = [
+  { key: 'standard',   label: '标准 256×256' },
+  { key: 'book',       label: '书籍 180×256' },
+  { key: 'tv',         label: '电视 256×131' },
+  { key: 'game',       label: '游戏 256×144' },
+  { key: 'decoration', label: '装修 172×256' },
+];
+const CANVAS_MODE_NAMES: Record<string, string> = {};
+for (const o of CANVAS_MODE_OPTIONS) CANVAS_MODE_NAMES[o.key] = o.label;
 const BLOCK_SIZES = [1, 3, 4, 7, 8, 13, 16, 19, 27, 32];
 const COLOR_VALUES = [2, 4, 8, 16, 32, 64, 128, 256];
 
@@ -75,9 +80,9 @@ export default function TomodachiPage() {
   const [estimatedMsVal, setEstimatedMsVal] = useState(0);
 
   const fileRef = useRef<HTMLInputElement>(null);
-  const [previewTitle, setPreviewTitle] = useState('预览');
   const [pixmapCanvas, setPixmapCanvasState] = useState<HTMLCanvasElement | null>(null);
   const [scale, setScale] = useState(1.0);
+  const [scriptName, setScriptName] = useState('');
 
   // setPixmap: ImageData → Canvas, exactly matching original setPixmap(QPixmap)
   const setPixmapCanvas = useCallback((data: ImageData) => {
@@ -96,19 +101,6 @@ export default function TomodachiPage() {
   const canGenerateJson = stage >= 4 && lastQuantizedColorIndex >= 0 &&
     (pixelBlockSize !== genBlockSize || lastQuantizedColorIndex !== genColorIndex);
   const canConfirm = jsonLoaded;
-
-  useEffect(() => {
-    const nm = CANVAS_MODE_NAMES[canvasMode] || '标准';
-    const mode = getCanvasMode(canvasMode);
-    if (stage >= 5 && pipelineJson) {
-      setPreviewTitle(`预览 - 画布: ${nm} ${mode.activeW}x${mode.activeH}  网格: ${pipelineJson.width}x${pipelineJson.height}`);
-    } else if (jsonLoaded && jsonMetadata) {
-      const jm = getCanvasMode(jsonMetadata.canvasMode || canvasMode);
-      setPreviewTitle(`预览 - 画布: ${nm} ${jm.activeW}x${jm.activeH}  网格: ${jsonMetadata.width}x${jsonMetadata.height}`);
-    } else {
-      setPreviewTitle(`预览 - 画布: ${nm} ${mode.activeW}x${mode.activeH}`);
-    }
-  }, [stage, canvasMode, pipelineJson, jsonLoaded, jsonMetadata]);
 
   // _rebuild_pixmap — exact translation: rebuild fitted at given scale
   const rebuildPixmapAtScale = useCallback((sourceImage: HTMLImageElement, mode: string, s: number) => {
@@ -212,6 +204,7 @@ export default function TomodachiPage() {
       img.onload = () => {
         setImage(img);
         setFittedCanvas(fitToCanvas(img, canvasMode));
+        setScriptName(file.name.replace(/\.[^/.]+$/, ''));
         setOffsetX(0); setOffsetY(0);
         setScale(1.0);
         setPixmapCanvasState(fitToCanvas(img, canvasMode)); // setSourceImage → pixmap = fitted
@@ -230,7 +223,6 @@ export default function TomodachiPage() {
         setScheduleInfo(''); setEstimatedMsVal(0); setConfirmEstimate(null);
         setBrushType('pixel'); setBrushSize(1); setBlockSizeIdx(0); setColorIdx(3);
         colStartsRef.current = []; rowStartsRef.current = [];
-        setPreviewTitle(`预览 - 画布: ${CANVAS_MODE_NAMES[canvasMode] || '标准'}`);
       };
       img.src = reader.result as string;
     };
@@ -250,7 +242,7 @@ export default function TomodachiPage() {
     const ctx = canvas.getContext('2d')!;
     const tmp = new OffscreenCanvas(cropped.width, cropped.height);
     tmp.getContext('2d')!.putImageData(cropped, 0, 0);
-    ctx.drawImage(tmp, 0, 0);
+    ctx.drawImage(tmp, off.ox, off.oy);
     const result = ctx.getImageData(0, 0, mode.activeW, mode.activeH);
     setCroppedImage(result);
     setPixmapCanvas(result); // setPixmap(cropped_pixmap)
@@ -391,7 +383,7 @@ export default function TomodachiPage() {
     const blob = new Blob([binaryData], { type: 'application/octet-stream' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = 'ns_auto_paint_script.bin';
+    a.download = (scriptName || 'ns_auto_paint_script') + '.bin';
     a.click();
   }, [binaryData]);
 
@@ -431,17 +423,12 @@ export default function TomodachiPage() {
         <div className="page-group-flex">
         {/* LEFT */}
         <div className="panel page-col" style={{ display: 'flex', flexDirection: 'column', gap: 8, overflowY: 'auto' }}>
-        <div className="panel-header">{'\u{1F47E} 图片处理设置'}</div>
-
-        <div className="flex-row">
-          <label>画布模式:</label>
-          <select value={canvasMode} onChange={e => setCanvasMode(e.target.value)} disabled={stage >= 2} style={{ flex: 1 }}>
-            {CANVAS_MODE_KEYS.map(k => <option key={k} value={k}>{CANVAS_MODE_NAMES[k]}</option>)}
-          </select>
-        </div>
+        <div className="panel-header">{'\u{1F6E0}\uFE0F 图片处理设置'}</div>
 
         <button onClick={() => fileRef.current?.click()} className="primary">{'\u{1F4C1} 上传图片'}</button>
         <input ref={fileRef} type="file" accept="image/*,.json" style={{ display: 'none' }} onChange={handleFileChange} />
+        <input type="text" value={scriptName} onChange={e => setScriptName(e.target.value)} placeholder="上传图片自动获取文件名（可修改）"
+          style={{ background: 'var(--btn-bg)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: 6, padding: '8px 12px', fontSize: 13, fontFamily: 'inherit', outline: 'none' }} />
 
         <button onClick={onCrop} disabled={!canCrop || loading}>{'\u2702\uFE0F 裁切'}</button>
 
@@ -451,7 +438,7 @@ export default function TomodachiPage() {
             onChange={e => setBlockSizeIdx(Number(e.target.value))} />
         </div>
 
-        <button onClick={onPixelize} disabled={!canPixelize || loading} className="primary">{'\u{1F532} 像素化'}</button>
+        <button onClick={onPixelize} disabled={!canPixelize || loading} className="primary">{'\u{1F9E9} 像素化'}</button>
 
         <div className="flex-col" style={{ gap: 2 }}>
           <label>最大颜色数: {_maxColorsVal}</label>
@@ -463,47 +450,18 @@ export default function TomodachiPage() {
 
         <button onClick={onOpenPixelWebsite} style={{ marginTop: 4 }}>{'\u{1F310} 推荐！打开第三方像素化网页'}</button>
 
-        <div className="section-divider">
-          <div className="panel-header">{'\u{1F4C4} JSON处理'}</div>
-          <div className="btn-row" style={{ marginBottom: 8 }}>
-            <button onClick={onGenerateJson} disabled={!canGenerateJson || loading}>{'\u{1F4DD} 生成JSON'}</button>
-            <button onClick={() => fileRef.current?.click()}>{'\u{1F4C1} 上传JSON'}</button>
-          </div>
-          <pre className="status-bar" style={{ whiteSpace: 'pre-wrap', fontSize: 11, lineHeight: 1.5 }}>
-            {jsonStatusText || JSON_PLACEHOLDER}
-          </pre>
-          <div className="btn-row" style={{ marginTop: 8 }}>
-            <button onClick={onConfirm} disabled={!canConfirm || loading} className="primary">{'\u{1F4CC} 生成脚本'}</button>
-            <button onClick={downloadScript} className="success" disabled={!binaryData}>{'\u{1F4BE} 下载脚本'} {binaryData ? `(${binaryData.length}B)` : ''}</button>
-          </div>
-          <pre className="status-bar" style={{ whiteSpace: 'pre-wrap', fontSize: 11, lineHeight: 1.5 }}>
-            {scriptInfoText}
-          </pre>
-        </div>
-
         {statusText && <div className="status-bar">{statusText}</div>}
-
-        <div className="section-divider" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div className="panel-header">脚本烧录</div>
-          {!pico ? (
-            <button onClick={handleConnectPico} className="primary" disabled={loading}>
-              {loading ? '连接中...' : '连接单片机（CDC 模式）'}
-            </button>
-          ) : (
-            <div className="flex-col">
-              <button onClick={handleDisconnectPico}>断开连接</button>
-              {binaryData && (
-                <button onClick={handleUploadScript} className="success" disabled={loading}>上传脚本到 Pico</button>
-              )}
-            </div>
-          )}
-          {serialInfo && <div className="status-bar">{serialInfo}</div>}
-        </div>
       </div>
 
-      {/* CENTER */}
+      {/* RIGHT */}
       <div className="panel page-col" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 8, flexShrink: 0 }}>{previewTitle}</div>
+        <div className="panel-header">{'\u{1F440} 预览'}</div>
+        <div className="flex-row" style={{ marginBottom: 8 }}>
+          <label>画布模式:</label>
+          <select value={canvasMode} onChange={e => setCanvasMode(e.target.value)} disabled={stage >= 2} style={{ flex: 1 }}>
+            {CANVAS_MODE_OPTIONS.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}
+          </select>
+        </div>
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'auto', minHeight: 0 }}>
           <CropPreview
             pixmapCanvas={pixmapCanvas}
@@ -517,16 +475,52 @@ export default function TomodachiPage() {
           />
         </div>
       </div>
+    </div>
 
-      {/* Confirm Dialog */}
-      {showConfirmDialog && confirmEstimate && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          background: 'var(--overlay-modal)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 'var(--z-modal)',
-        }}>
-          <div className="panel" style={{ minWidth: 480, maxWidth: 'min(600px, 90vw)', maxHeight: '80vh', overflowY: 'auto' }}>
-            <div className="panel-header">绘图预估</div>
-            <pre style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6, fontSize: 13, marginBottom: 16 }}>
+    <div className="panel" style={{ marginTop: 8 }}>
+      <div className="panel-header">{'\u{1F501} JSON处理'}</div>
+      <div className="btn-row" style={{ marginBottom: 8 }}>
+        <button onClick={onGenerateJson} disabled={!canGenerateJson || loading}>{'\u{1F4DD} 生成JSON'}</button>
+        <button onClick={() => fileRef.current?.click()}>{'\u{1F4C1} 上传JSON'}</button>
+      </div>
+      <pre className="status-bar" style={{ whiteSpace: 'pre-wrap', fontSize: 11, lineHeight: 1.5 }}>
+        {jsonStatusText || JSON_PLACEHOLDER}
+      </pre>
+      <div className="btn-row" style={{ marginTop: 8 }}>
+        <button onClick={onConfirm} disabled={!canConfirm || loading} className="primary">{'\u2728 生成脚本'}</button>
+        <button onClick={downloadScript} className="success" disabled={!binaryData}>{'\u{1F4BE} 下载脚本'} {binaryData ? `(${binaryData.length}B)` : ''}</button>
+      </div>
+      <pre className="status-bar" style={{ whiteSpace: 'pre-wrap', fontSize: 11, lineHeight: 1.5 }}>
+        {scriptInfoText}
+      </pre>
+    </div>
+
+    <div className="panel" style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div className="panel-header">{'\u{1F525} 脚本烧录'}</div>
+      {!pico ? (
+        <button onClick={handleConnectPico} className="primary" disabled={loading}>
+          {loading ? '连接中...' : '\u{1F50C} 连接单片机（CDC 模式）'}
+        </button>
+      ) : (
+        <div className="flex-col">
+          <button onClick={handleDisconnectPico}>断开连接</button>
+          {binaryData && (
+            <button onClick={handleUploadScript} className="success" disabled={loading}>上传脚本到 Pico</button>
+          )}
+        </div>
+      )}
+      {serialInfo && <div className="status-bar">{serialInfo}</div>}
+    </div>
+
+    {/* Confirm Dialog */}
+    {showConfirmDialog && confirmEstimate && (
+      <div style={{
+        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+        background: 'var(--overlay-modal)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 'var(--z-modal)',
+      }}>
+        <div className="panel" style={{ minWidth: 480, maxWidth: 'min(600px, 90vw)', maxHeight: '80vh', overflowY: 'auto' }}>
+          <div className="panel-header">绘图预估</div>
+          <pre style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6, fontSize: 13, marginBottom: 16 }}>
 {`【最优方案】${confirmEstimate.bestDesc}
 预估总耗时：${confirmEstimate.formattedTime}
 
@@ -534,16 +528,15 @@ export default function TomodachiPage() {
 ${(confirmEstimate.evaluationLog || []).join('\n')}
 
 是否立即生成脚本？`}
-            </pre>
-            <div className="flex-row" style={{ justifyContent: 'flex-end' }}>
-              <button onClick={() => setShowConfirmDialog(false)}>取消</button>
-              <button onClick={handleConfirmYes} className="primary">确定</button>
-            </div>
+          </pre>
+          <div className="flex-row" style={{ justifyContent: 'flex-end' }}>
+            <button onClick={() => setShowConfirmDialog(false)}>取消</button>
+            <button onClick={handleConfirmYes} className="primary">确定</button>
           </div>
         </div>
-      )}
-    </div>
       </div>
+    )}
+    </div>
     </div>
   );
 }

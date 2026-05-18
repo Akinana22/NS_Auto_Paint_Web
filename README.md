@@ -3,7 +3,7 @@
 基于 RP2040 Pico 模拟 NS Pro 手柄的自动像素画绘制工具。  
 原 Python/PySide6 桌面应用重构为 TypeScript Web 版本。
 
-在线使用：[https://akinana22.github.io/NS_Auto_Paint_Web/](https://akinana22.github.io/NS_Auto_Paint_Web/)
+在线使用：[https://akinana22.github.io/NS_Auto_Paint_Web/#/](https://akinana22.github.io/NS_Auto_Paint_Web/#/)
 
 ## 使用流程
 

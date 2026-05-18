@@ -1,7 +1,7 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
   --bg: rgb(255, 191, 1);
-  --panel-bg: rgba(255, 255, 255, 0.85);
+  --panel-bg: rgb(255, 243, 204);
   --text: #222;
   --text-dim: #666;
   --border: #ccc;
@@ -28,7 +28,7 @@ body { min-height: 100vh; background: var(--bg); }
 
 .top-nav {
   display: flex; gap: var(--space-sm);
-  background: rgba(255, 255, 255, 0.85);
+  background: rgb(255, 243, 204);
   border: 1px solid var(--border);
   border-radius: 8px;
   backdrop-filter: blur(6px);
@@ -47,7 +47,7 @@ body { min-height: 100vh; background: var(--bg); }
 .top-nav a.active { background: var(--highlight); color: #fff; }
 .top-nav a:hover:not(.active) { background: var(--overlay-dim); color: var(--text); }
 
-.main-content { flex: 1; display: flex; gap: var(--space-lg); overflow: hidden; }
+.main-content { flex: 1; display: flex; gap: var(--space-lg); }
 
 .panel {
   background: var(--panel-bg); border-radius: 8px;
@@ -115,7 +115,6 @@ label { font-size: 13px; color: var(--text-dim); display: flex; align-items: cen
 .page-col {
   flex: 1 1 1px;
   min-width: var(--sw20);
-  max-width: var(--sw50);
 }
 .page-col-full {
   flex: 1 1 1px;

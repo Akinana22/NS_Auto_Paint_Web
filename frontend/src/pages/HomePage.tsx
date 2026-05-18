@@ -17,7 +17,7 @@ function parseMd(src: string) {
     // code block toggle
     if (/^```/.test(line.trim())) {
       if (inCode) {
-        pushNode(<pre key={i} style={{ background: 'rgba(0,0,0,0.05)', padding: 12, borderRadius: 6, fontSize: 12, lineHeight: 1.6, overflowX: 'auto' }}><code>{codeBuffer.trimEnd()}</code></pre>);
+        pushNode(<pre key={i} style={{ background: 'rgba(0,0,0,0.05)', padding: 12, borderRadius: 6, fontSize: 12, lineHeight: 1.6, overflowX: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}><code>{codeBuffer.trimEnd()}</code></pre>);
         codeBuffer = '';
         inCode = false;
       } else {

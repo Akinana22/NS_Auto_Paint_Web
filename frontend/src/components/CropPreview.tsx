@@ -129,10 +129,23 @@ export default function CropPreview({ pixmapCanvas, cropMode, canvasMode, offset
     e.preventDefault(); const pos = getCanvasPos(e.clientX, e.clientY); lastPosRef.current = pos; setDrag(true);
   }, [getCanvasPos]);
 
+  const handleTouchDown = useCallback((e: React.TouchEvent) => {
+    e.preventDefault(); const t = e.touches[0]; const pos = getCanvasPos(t.clientX, t.clientY); lastPosRef.current = pos; setDrag(true);
+  }, [getCanvasPos]);
+
   useEffect(() => {
     if (!drag) return;
     const onMove = (e: MouseEvent) => {
       const pos = getCanvasPos(e.clientX, e.clientY);
+      const dx = pos.x - lastPosRef.current.x; const dy = pos.y - lastPosRef.current.y;
+      lastPosRef.current = pos;
+      onOffsetChange(offsetX + dx, offsetY + dy);
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      e.preventDefault();
+      if (e.touches.length !== 1) return;
+      const t = e.touches[0];
+      const pos = getCanvasPos(t.clientX, t.clientY);
       const dx = pos.x - lastPosRef.current.x; const dy = pos.y - lastPosRef.current.y;
       lastPosRef.current = pos;
       onOffsetChange(offsetX + dx, offsetY + dy);
@@ -154,16 +167,19 @@ export default function CropPreview({ pixmapCanvas, cropMode, canvasMode, offset
     };
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup', onUp);
-    return () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
+    document.addEventListener('touchmove', onTouchMove, { passive: false });
+    document.addEventListener('touchend', onUp);
+    return () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp);
+      document.removeEventListener('touchmove', onTouchMove); document.removeEventListener('touchend', onUp); };
   }, [drag, cropMode, offsetX, offsetY, onOffsetChange, getCanvasPos, pixmapCanvas, cw, ch]);
 
   // ======== wheelEvent via useEffect (passive:false) ========
   useEffect(() => {
     const el = canvasRef.current;
     if (!el) return;
-    const handler = (e: WheelEvent) => {
-      e.preventDefault();
-      if (!e.shiftKey) return;
+      const handler = (e: WheelEvent) => {
+        if (!e.shiftKey) return;
+        e.preventDefault();
       const rect = el.getBoundingClientRect();
       const ax = e.clientX - rect.left; const ay = e.clientY - rect.top;
       const delta = e.deltaY > 0 ? -WHEEL_STEP : WHEEL_STEP;
@@ -232,11 +248,11 @@ export default function CropPreview({ pixmapCanvas, cropMode, canvasMode, offset
   const fitView = useCallback(() => { onScaleChange(1.0); onOffsetChange(0, 0); }, [onScaleChange, onOffsetChange]);
 
   return (
-    <div ref={containerRef} style={{ position: 'relative', overflow: 'hidden', flex: 1, width: '100%', height: '100%' }}
+    <div ref={containerRef} style={{ position: 'relative', overflow: 'hidden', flex: 1, width: '100%', aspectRatio: '1 / 1' }}
       tabIndex={0} onKeyDown={handleKeyDown}>
       <canvas ref={canvasRef}
-        style={{ imageRendering: scale >= GRID_THRESHOLD ? 'pixelated' : 'auto', cursor: drag ? 'grabbing' : 'grab', width: '100%', height: '100%', display: 'block' }}
-        onMouseDown={handleDown} />
+        style={{ imageRendering: scale >= GRID_THRESHOLD ? 'pixelated' : 'auto', cursor: drag ? 'grabbing' : 'grab', width: '100%', height: '100%', display: 'block', touchAction: 'none' }}
+        onMouseDown={handleDown} onTouchStart={handleTouchDown} />
       <div style={{ position: 'absolute', bottom: 8, right: 8, display: 'flex', gap: 2, background: 'rgba(20,20,20,0.85)', borderRadius: 6, padding: 4 }}>
         <button onClick={zoomOut} style={{ minWidth: 24, fontSize: 14, padding: '2px 6px', background: 'rgba(60,60,60,0.8)', color: '#fff', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 4 }}>−</button>
         <span style={{ display: 'inline-flex', alignItems: 'center', padding: '2px 8px', fontSize: 12, color: '#000', background: 'rgba(255,255,255,0.85)', borderRadius: 3, minWidth: 42, justifyContent: 'center' }}>{Math.round(scale * 100)}%</span>
