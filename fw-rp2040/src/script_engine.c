@@ -23,12 +23,13 @@ static void _start_wait(script_engine_t* eng, uint8_t type, uint16_t dur, uint16
 static void _load_segment(script_engine_t* eng, int32_t idx) {
     if (idx >= eng->seg_count) return;
     const uint8_t* flash = eng->seg_flash;
-    uint32_t table_base = 8; // num_segments(4) + table_offset(4)
+    uint32_t table_base = 4; // after num_segments(4)
     uint32_t entry_off = table_base + (uint32_t)idx * 8;
     uint32_t seg_off, seg_sz;
     memcpy(&seg_off, flash + entry_off, 4);
     memcpy(&seg_sz, flash + entry_off + 4, 4);
     if (seg_sz > eng->seg_ram_size) return;
+    if (seg_off + seg_sz > eng->body_size) return;
     memcpy(eng->seg_ram, flash + seg_off, seg_sz);
     eng->script_ptr = eng->seg_ram;
     eng->script_size = seg_sz;
@@ -49,6 +50,7 @@ void script_engine_init(script_engine_t* eng, script_apply_fn apply_fn, script_g
 void script_engine_load(script_engine_t* eng, const uint8_t* flash_body, uint32_t body_size)
 {
     eng->seg_flash = flash_body;
+    eng->body_size = body_size;
     eng->pc = 0;
     eng->running = false;
     eng->waiting = false;
@@ -60,7 +62,7 @@ void script_engine_load(script_engine_t* eng, const uint8_t* flash_body, uint32_
     reset_report(&eng->current);
 
     uint32_t num = 0;
-    if (body_size >= 8) memcpy(&num, flash_body, 4);
+    if (body_size >= 4) memcpy(&num, flash_body, 4);
     if (num > 0 && num <= SCRIPT_MAX_SEGMENTS) eng->seg_count = (int32_t)num;
 }
 
@@ -81,6 +83,7 @@ void script_engine_start(script_engine_t* eng)
 void script_engine_stop(script_engine_t* eng)
 {
     eng->running = false;
+    eng->waiting = false;
     eng->held_buttons = 0;
     eng->repeat_count = 0;
     eng->wait_type = WAIT_NONE;

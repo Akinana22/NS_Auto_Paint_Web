@@ -14,7 +14,7 @@ extern "C" {
 #endif
 
 /** 返回检测到的模式 (MODE_NONE 表示无限等待) — 实现在 RAM 中 */
-int detect_mode(void);
+int __not_in_flash_func(detect_mode)(void);
 
 #ifdef __cplusplus
 }

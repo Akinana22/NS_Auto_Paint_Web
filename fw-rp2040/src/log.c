@@ -14,7 +14,7 @@ void log_init(void) {
 void log_event(uint8_t mode) {
     if (!lfs_is_ready()) return;
     log_entry_t entry;
-    entry.timestamp = time_us_32();
+    entry.timestamp = time_us_64();
     entry.mode = mode;
 
     lfs_file_t file;
@@ -24,7 +24,8 @@ void log_event(uint8_t mode) {
     lfs_soff_t sz = lfs_file_seek(&lfs, &file, 0, LFS_SEEK_END);
     if (sz >= LOG_MAX_SIZE) {
         lfs_file_close(&lfs, &file);
-        lfs_remove(&lfs, "log.bin");
+        lfs_remove(&lfs, "log.old");
+        lfs_rename(&lfs, "log.bin", "log.old");
         err = lfs_file_open(&lfs, &file, "log.bin", LFS_O_RDWR | LFS_O_CREAT | LFS_O_APPEND);
         if (err < 0) return;
     }

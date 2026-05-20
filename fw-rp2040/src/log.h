@@ -9,7 +9,7 @@ extern "C" {
 #endif
 
 typedef struct {
-    uint32_t timestamp;
+    uint64_t timestamp;
     uint8_t  mode;
 } log_entry_t;
 

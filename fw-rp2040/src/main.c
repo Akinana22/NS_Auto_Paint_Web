@@ -44,18 +44,6 @@ static uint8_t  cdc_page_pos  = 0;
 static uint32_t cdc_crc = 0;
 static uint32_t cdc_erased_sector = 0xFFFFFFFF; // lazy sector erase tracker
 
-// CRC32 table for streaming
-static uint32_t _crc32_tab[256];
-static bool _crc32_tab_ready = false;
-static void _init_crc32_tab(void) {
-    for (uint32_t i = 0; i < 256; i++) {
-        uint32_t c = i;
-        for (int j = 0; j < 8; j++) c = (c >> 1) ^ (c & 1 ? 0xEDB88320 : 0);
-        _crc32_tab[i] = c;
-    }
-    _crc32_tab_ready = true;
-}
-
 // ==== Time ====
 static volatile uint32_t system_ms = 0;
 static struct repeating_timer _ms_timer;
@@ -116,7 +104,7 @@ static void cdc_process_cmd(const char* cmd) {
             cdc_page_pos = 0; cdc_uploading = true;
             cdc_crc = 0xFFFFFFFF;
             cdc_erased_sector = 0xFFFFFFFF;
-            if (!_crc32_tab_ready) _init_crc32_tab();
+            flash_store_crc32_init();
             cdc_respond("OK:READY_FOR_DATA\n");
         } else cdc_respond("ERR:BAD_SIZE\n");
     } else if (strncmp(cmd, "CRC:", 4) == 0) {
@@ -142,8 +130,7 @@ void tud_cdc_rx_cb(uint8_t itf) {
     for (uint32_t i = 0; i < count; i++) {
         if (cdc_uploading) {
             cdc_page_buf[cdc_page_pos++] = buf[i];
-            if (!_crc32_tab_ready) _init_crc32_tab();
-            cdc_crc = _crc32_tab[(cdc_crc ^ buf[i]) & 0xFF] ^ (cdc_crc >> 8);
+            cdc_crc = flash_store_crc32_stream_byte(cdc_crc, buf[i]);
 
             if (cdc_page_pos == 256 || cdc_upload_offset + cdc_page_pos >= cdc_upload_size) {
                 uint32_t write_addr = CDC_SCRIPT_OFFSET + SCRIPT_HEADER_SECTOR + cdc_upload_offset;

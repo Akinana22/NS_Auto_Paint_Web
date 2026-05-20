@@ -6,7 +6,7 @@
 #include <string.h>
 #include <stdio.h>
 
-// ============ CRC32 table ============
+// ============ CRC32 ============
 static uint32_t _crc32_table[256];
 static bool _crc_ready = false;
 
@@ -19,6 +19,14 @@ static void _build_crc32(void)
         _crc32_table[i] = crc;
     }
     _crc_ready = true;
+}
+
+void flash_store_crc32_init(void) { if (!_crc_ready) _build_crc32(); }
+
+uint32_t flash_store_crc32_stream_byte(uint32_t crc, uint8_t byte)
+{
+    if (!_crc_ready) _build_crc32();
+    return _crc32_table[(crc ^ byte) & 0xFF] ^ (crc >> 8);
 }
 
 uint32_t flash_store_crc32(const uint8_t* data, uint32_t len)
@@ -55,11 +63,11 @@ void flash_raw_read(uint32_t offset, uint8_t* buf, uint32_t len)
 
 void flash_store_init(void) { /* header validation done per-partition on access */ }
 
-static bool _validate_header(uint32_t offset, script_header_t* out)
+static bool _validate_header(uint32_t offset, uint32_t partition_size, script_header_t* out)
 {
     flash_raw_read(offset, (uint8_t*)out, sizeof(script_header_t));
     if (out->magic != SCRIPT_MAGIC) return false;
-    if (out->size > CDC_SCRIPT_SIZE - SCRIPT_HEADER_SECTOR) return false;
+    if (out->size > partition_size - SCRIPT_HEADER_SECTOR) return false;
 
     uint8_t* body = (uint8_t*)(XIP_BASE + offset + SCRIPT_HEADER_SECTOR);
     uint32_t calc = flash_store_crc32(body, out->size);
@@ -69,7 +77,7 @@ static bool _validate_header(uint32_t offset, script_header_t* out)
 bool cdc_script_has_valid(void)
 {
     script_header_t hdr;
-    return _validate_header(CDC_SCRIPT_OFFSET, &hdr);
+    return _validate_header(CDC_SCRIPT_OFFSET, CDC_SCRIPT_SIZE, &hdr);
 }
 
 uint32_t cdc_script_get_size(void)
@@ -121,7 +129,7 @@ bool cdc_script_write(const uint8_t* data, uint32_t size, uint32_t checksum)
 bool msc_script_has_valid(void)
 {
     script_header_t hdr;
-    return _validate_header(MSC_SCRIPT_OFFSET, &hdr);
+    return _validate_header(MSC_SCRIPT_OFFSET, MSC_SCRIPT_SIZE, &hdr);
 }
 
 uint32_t msc_script_get_size(void)

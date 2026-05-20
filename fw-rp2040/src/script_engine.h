@@ -28,6 +28,7 @@ typedef struct {
     uint8_t*        seg_ram;
     uint32_t        seg_ram_size;
     const uint8_t*  seg_flash;
+    uint32_t        body_size;
     int32_t         seg_count;
     int32_t         seg_index;
 

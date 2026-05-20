@@ -31,7 +31,9 @@ int32_t  msc_script_read_sectors(uint32_t sector, uint32_t count, void* buf);
 int32_t  msc_script_write_sectors(uint32_t sector, uint32_t count, const void* buf);
 
 // ---- CRC32 ----
+void     flash_store_crc32_init(void);
 uint32_t flash_store_crc32(const uint8_t* data, uint32_t len);
+uint32_t flash_store_crc32_stream_byte(uint32_t crc, uint8_t byte); // incremental, no final XOR
 
 // ---- Low-level raw access ----
 void flash_raw_erase(uint32_t offset, uint32_t len);

@@ -1,4 +1,9 @@
-/** MSC 块设备实现 — 直读直写 MSC 脚本分区 Flash */
+/** MSC 块设备实现 — 直读直写 MSC 脚本分区 Flash
+ *
+ * Write uses sector-level Read-Modify-Write to preserve adjacent FAT data.
+ * XIP cache invalidation is handled automatically by flash_range_erase/program
+ * (RP2040 bootrom restores XIP mode and clears cache on return).
+ */
 #include "msc_disk.h"
 #include "pico/stdlib.h"
 #include "flash_store.h"
@@ -20,9 +25,25 @@ int32_t __not_in_flash_func(msc_disk_write)(uint32_t lba, uint32_t offset, const
 {
     uint32_t addr = MSC_SCRIPT_OFFSET + lba * DISK_SECTOR_SIZE + offset;
     if (addr + bufsize > MSC_SCRIPT_OFFSET + MSC_SCRIPT_SIZE || addr < MSC_SCRIPT_OFFSET) return -1;
-    uint32_t ints = save_and_disable_interrupts();
-    flash_range_erase(addr, (bufsize + FLASH_SECTOR_SIZE - 1) & ~(FLASH_SECTOR_SIZE - 1));
-    flash_range_program(addr, buffer, bufsize);
-    restore_interrupts(ints);
+
+    static uint8_t sec_buf[FLASH_SECTOR_SIZE]; // 4096 B, BSS
+    uint32_t cur_off = 0;
+    while (cur_off < bufsize) {
+        uint32_t this_addr = addr + cur_off;
+        uint32_t sector_addr = this_addr & ~(FLASH_SECTOR_SIZE - 1);
+        uint32_t sec_off = this_addr - sector_addr;
+        uint32_t chunk = FLASH_SECTOR_SIZE - sec_off;
+        if (chunk > bufsize - cur_off) chunk = bufsize - cur_off;
+
+        memcpy(sec_buf, (const uint8_t*)(XIP_BASE + sector_addr), FLASH_SECTOR_SIZE);
+        memcpy(sec_buf + sec_off, buffer + cur_off, chunk);
+
+        uint32_t ints = save_and_disable_interrupts();
+        flash_range_erase(sector_addr, FLASH_SECTOR_SIZE);
+        flash_range_program(sector_addr, sec_buf, FLASH_SECTOR_SIZE);
+        restore_interrupts(ints);
+
+        cur_off += chunk;
+    }
     return (int32_t)bufsize;
 }
