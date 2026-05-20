@@ -24,11 +24,11 @@ void script_engine_init(script_engine_t* eng, script_apply_fn apply_fn, script_g
     if (eng->apply) eng->apply(&eng->current);
 }
 
-void script_engine_load(script_engine_t* eng, const uint8_t* script, uint32_t size) { eng->script_ptr = script; eng->script_size = size; eng->pc = 0; eng->loop_pc = 0; eng->loop_count = 0; eng->running = false; eng->waiting = false; eng->held_buttons = 0; reset_report(&eng->current); }
+void script_engine_load(script_engine_t* eng, const uint8_t* script, uint32_t size) { eng->script_ptr = script; eng->script_size = size; eng->pc = 0; eng->loop_pc = 0; eng->loop_count = 0; eng->running = false; eng->waiting = false; eng->held_buttons = 0; eng->stick_waiting = 0; reset_report(&eng->current); }
 
-void script_engine_start(script_engine_t* eng) { if (!eng->script_ptr || eng->script_size == 0) return; eng->running = true; eng->pc = 0; eng->waiting = false; eng->held_buttons = 0; reset_report(&eng->current); if (eng->apply) eng->apply(&eng->current); }
+void script_engine_start(script_engine_t* eng) { if (!eng->script_ptr || eng->script_size == 0) return; eng->running = true; eng->pc = 0; eng->waiting = false; eng->held_buttons = 0; eng->stick_waiting = 0; reset_report(&eng->current); if (eng->apply) eng->apply(&eng->current); }
 
-void script_engine_stop(script_engine_t* eng) { eng->running = false; eng->held_buttons = 0; reset_report(&eng->current); if (eng->apply) eng->apply(&eng->current); }
+void script_engine_stop(script_engine_t* eng) { eng->running = false; eng->held_buttons = 0; eng->stick_waiting = 0; reset_report(&eng->current); if (eng->apply) eng->apply(&eng->current); }
 
 bool script_engine_is_running(const script_engine_t* eng) { return eng->running; }
 
@@ -46,8 +46,8 @@ static bool execute_op(script_engine_t* eng) {
     case OP_BTN_DOWN:  { uint16_t btn = read_u16(buf, &pc); eng->current.buttons = btn; eng->held_buttons = btn; if (eng->apply) eng->apply(&eng->current); eng->pc = pc; return true;  }
     case OP_BTN_UP:    { eng->current.buttons = 0; eng->held_buttons = 0; if (eng->apply) eng->apply(&eng->current); eng->pc = pc; return true;  }
     case OP_DPAD:      { eng->current.hat = buf[pc++]; if (eng->apply) eng->apply(&eng->current); eng->pc = pc; return true;  }
-    case OP_LSTICK:    { eng->current.lx = buf[pc++]; eng->current.ly = buf[pc++]; uint16_t dur = read_u16(buf, &pc); if (eng->apply) eng->apply(&eng->current); if (dur > 0) { eng->wait_until = eng->get_ms() + dur; eng->waiting = true; eng->held_buttons = 0xFFFF; eng->pc = pc; return false; } eng->pc = pc; return true; }
-    case OP_RSTICK:    { eng->current.rx = buf[pc++]; eng->current.ry = buf[pc++]; uint16_t dur = read_u16(buf, &pc); if (eng->apply) eng->apply(&eng->current); if (dur > 0) { eng->wait_until = eng->get_ms() + dur; eng->waiting = true; eng->held_buttons = 0xFFFF; eng->pc = pc; return false; } eng->pc = pc; return true; }
+    case OP_LSTICK:    { eng->current.lx = buf[pc++]; eng->current.ly = buf[pc++]; uint16_t dur = read_u16(buf, &pc); if (eng->apply) eng->apply(&eng->current); if (dur > 0) { eng->wait_until = eng->get_ms() + dur; eng->waiting = true; eng->stick_waiting = 1; eng->pc = pc; return false; } eng->pc = pc; return true; }
+    case OP_RSTICK:    { eng->current.rx = buf[pc++]; eng->current.ry = buf[pc++]; uint16_t dur = read_u16(buf, &pc); if (eng->apply) eng->apply(&eng->current); if (dur > 0) { eng->wait_until = eng->get_ms() + dur; eng->waiting = true; eng->stick_waiting = 2; eng->pc = pc; return false; } eng->pc = pc; return true; }
     case OP_LOOP: { uint16_t count = read_u16(buf, &pc); uint32_t addr = read_u32(buf, &pc); if (eng->loop_count == 0) { if (count == 0) { eng->pc = pc; return true; } eng->loop_count = count - 1; eng->loop_pc = pc; eng->pc = addr; } else { eng->loop_count--; if (eng->loop_count == 0) { eng->loop_pc = 0; eng->pc = pc; } else eng->pc = addr; } return true; }
     default: eng->running = false; return false;
     }
@@ -55,12 +55,12 @@ static bool execute_op(script_engine_t* eng) {
 
 bool script_engine_tick(script_engine_t* eng) {
     if (!eng->running) return false;
-    // Stick duration timeout → reset all 4 axes
-    if (eng->waiting && eng->held_buttons == 0xFFFF) {
+    if (eng->waiting && eng->stick_waiting) {
         if (eng->get_ms() >= eng->wait_until) {
-            eng->current.lx = STICK_CENTER; eng->current.ly = STICK_CENTER;
-            eng->current.rx = STICK_CENTER; eng->current.ry = STICK_CENTER;
-            eng->held_buttons = 0;
+            int sw = eng->stick_waiting;
+            if (sw == 1) { eng->current.lx = STICK_CENTER; eng->current.ly = STICK_CENTER; }
+            else if (sw == 2) { eng->current.rx = STICK_CENTER; eng->current.ry = STICK_CENTER; }
+            eng->stick_waiting = 0;
             if (eng->apply) eng->apply(&eng->current);
             eng->waiting = false;
         }

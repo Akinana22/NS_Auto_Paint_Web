@@ -16,13 +16,8 @@ int __not_in_flash_func(detect_mode)(void)
     // Wait for button release (may be held at power-on from previous press)
     while (!gpio_get(BOOTSEL_PIN)) tight_loop_contents();
 
-    // Wait for first press with long-press timeout
-    absolute_time_t start_time = get_absolute_time();
-    while (gpio_get(BOOTSEL_PIN)) {
-        if (absolute_time_diff_us(start_time, get_absolute_time()) > LONG_PRESS_MS * 1000) {
-            return MODE_NONE; // no press → wait forever
-        }
-    }
+    // Wait for first press indefinitely
+    while (gpio_get(BOOTSEL_PIN)) tight_loop_contents();
 
     // Button pressed — start timing for long-press
     absolute_time_t press_start = get_absolute_time();

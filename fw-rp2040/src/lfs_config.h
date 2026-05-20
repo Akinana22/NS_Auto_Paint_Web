@@ -13,6 +13,7 @@ extern const struct lfs_config lfs_cfg;
 extern lfs_t lfs;
 
 void lfs_init(void);
+bool lfs_is_ready(void);
 
 #ifdef __cplusplus
 }

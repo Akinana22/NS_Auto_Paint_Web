@@ -48,8 +48,8 @@ export const STICK_CENTER = 128;
 export const STICK_MIN = 0;
 export const STICK_MAX = 255;
 
-/** Flash 脚本存储地址 (固件会从此处读取) */
-export const FLASH_SCRIPT_OFFSET = 0x100000; // 1MB 偏移
+/** Flash 脚本存储地址 — CDC 脚本区 (0x0C0000) */
+export const FLASH_SCRIPT_OFFSET = 0x0C0000;
 export const FLASH_SCRIPT_MAX_SIZE = 512 * 1024; // 512KB
 
 /** 脚本文件魔术字 + 头部 */
@@ -64,4 +64,4 @@ export interface ScriptHeader {
 }
 
 /** 脚本头部大小 */
-export const SCRIPT_HEADER_SIZE = 20;
+export const SCRIPT_HEADER_SIZE = 24;

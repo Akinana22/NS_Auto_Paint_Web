@@ -41,10 +41,16 @@ const struct lfs_config lfs_cfg = {
 
 lfs_t lfs;
 
+static bool lfs_ready = false;
+
 void lfs_init(void) {
     int err = lfs_mount(&lfs, &lfs_cfg);
     if (err) {
-        lfs_format(&lfs, &lfs_cfg);
-        lfs_mount(&lfs, &lfs_cfg);
+        err = lfs_format(&lfs, &lfs_cfg);
+        if (err >= 0) err = lfs_mount(&lfs, &lfs_cfg);
+        if (err < 0) return;
     }
+    lfs_ready = true;
 }
+
+bool lfs_is_ready(void) { return lfs_ready; }

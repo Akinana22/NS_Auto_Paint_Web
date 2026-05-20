@@ -44,10 +44,11 @@ enum { ITF_CDC = 0, ITF_CDC_DATA, ITF_MSC, CDCMSC_MAX }; // CDC+MSC: 3 interface
 #define EPNUM_MSC_OUT    0x03
 #define EPNUM_MSC_IN     0x84
 
-// HID-only configuration
+// HID-only configuration (IN+OUT for Switch compatibility)
 static uint8_t const hid_only_config[] = {
-    TUD_CONFIG_DESCRIPTOR(1, 1, 0, TUD_CONFIG_DESC_LEN + TUD_HID_DESC_LEN, 0, 500),
-    TUD_HID_DESCRIPTOR(ITF_HID, 0, false, sizeof(desc_hid_report), EPNUM_HID_OUT, CFG_TUD_HID_EP_BUFSIZE, 8),
+    TUD_CONFIG_DESCRIPTOR(1, 1, 0, TUD_CONFIG_DESC_LEN + TUD_HID_DESC_LEN + 7, 0, 500),
+    TUD_HID_INOUT_DESCRIPTOR(ITF_HID, 0, false, sizeof(desc_hid_report),
+        EPNUM_HID_OUT, EPNUM_HID_IN, CFG_TUD_HID_EP_BUFSIZE, 8),
 };
 
 // CDC+MSC configuration (no HID)

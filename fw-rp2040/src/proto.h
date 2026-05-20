@@ -79,7 +79,7 @@ enum BtnMask {
 
 // ================ Script Header ================
 #define SCRIPT_MAGIC      0x4E534150  // "NSAP"
-#define SCRIPT_HEADER_SIZE 20
+#define SCRIPT_HEADER_SIZE sizeof(script_header_t)
 
 #pragma pack(push, 1)
 typedef struct {

@@ -102,7 +102,7 @@ bool cdc_script_write(const uint8_t* data, uint32_t size, uint32_t checksum)
     script_header_t hdr = { SCRIPT_MAGIC, 1, size, checksum, 0, 0 };
     uint32_t total = SCRIPT_HEADER_SIZE + size;
 
-    uint8_t buf[32768];
+    static uint8_t buf[32768];
     if (total > sizeof(buf)) return false;
     memset(buf, 0xFF, sizeof(buf));
     memcpy(buf, &hdr, SCRIPT_HEADER_SIZE);

@@ -10,6 +10,7 @@ void log_init(void) {
 }
 
 void log_event(uint8_t mode) {
+    if (!lfs_is_ready()) return;
     log_entry_t entry;
     entry.timestamp = time_us_32();
     entry.mode = mode;

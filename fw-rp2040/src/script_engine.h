@@ -21,6 +21,7 @@ typedef struct {
     uint32_t    wait_until;
     bool        waiting;
     uint16_t    held_buttons;
+    uint8_t     stick_waiting; // 1=left, 2=right, 0=none
 
     script_apply_fn   apply;
     script_get_ms_fn  get_ms;
