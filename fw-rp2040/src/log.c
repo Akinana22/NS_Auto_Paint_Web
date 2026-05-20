@@ -5,6 +5,8 @@
 #include <string.h>
 #include <stdio.h>
 
+#define LOG_MAX_SIZE (LOG_SIZE * 3 / 4) // ~192KB, rotate when 75% full
+
 void log_init(void) {
     lfs_init();
 }
@@ -16,8 +18,17 @@ void log_event(uint8_t mode) {
     entry.mode = mode;
 
     lfs_file_t file;
-    int err = lfs_file_open(&lfs, &file, "log.bin", LFS_O_WRONLY | LFS_O_CREAT | LFS_O_APPEND);
+    int err = lfs_file_open(&lfs, &file, "log.bin", LFS_O_RDWR | LFS_O_CREAT | LFS_O_APPEND);
     if (err < 0) return;
+
+    lfs_soff_t sz = lfs_file_seek(&lfs, &file, 0, LFS_SEEK_END);
+    if (sz >= LOG_MAX_SIZE) {
+        lfs_file_close(&lfs, &file);
+        lfs_remove(&lfs, "log.bin");
+        err = lfs_file_open(&lfs, &file, "log.bin", LFS_O_RDWR | LFS_O_CREAT | LFS_O_APPEND);
+        if (err < 0) return;
+    }
+
     lfs_file_write(&lfs, &file, &entry, sizeof(entry));
     lfs_file_close(&lfs, &file);
 }

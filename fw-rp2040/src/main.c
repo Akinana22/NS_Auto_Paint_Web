@@ -183,8 +183,8 @@ int32_t tud_msc_scsi_cb(uint8_t lun, uint8_t const scsi_cmd[16], void* buffer, u
     case 0x1B: return 0;
     case 0x1E: return 0;
     case 0x25: { uint32_t bc; uint16_t bs; tud_msc_capacity_cb(lun,&bc,&bs); uint32_t lba=bc-1; buf[0]=lba>>24;buf[1]=lba>>16;buf[2]=lba>>8;buf[3]=lba; buf[4]=bs>>24;buf[5]=bs>>16;buf[6]=bs>>8;buf[7]=bs; return 8; }
-    case 0x28:{ uint32_t lba=((uint32_t)scsi_cmd[2]<<24)|((uint32_t)scsi_cmd[3]<<16)|((uint32_t)scsi_cmd[4]<<8)|scsi_cmd[5]; return tud_msc_read10_cb(lun,lba,0,buf,bufsize); }
-    case 0x2A:{ uint32_t lba=((uint32_t)scsi_cmd[2]<<24)|((uint32_t)scsi_cmd[3]<<16)|((uint32_t)scsi_cmd[4]<<8)|scsi_cmd[5]; return tud_msc_write10_cb(lun,lba,0,buf,bufsize); }
+    case 0x28:{ /* READ10 — block-aligned, offset always 0 */ uint32_t lba=((uint32_t)scsi_cmd[2]<<24)|((uint32_t)scsi_cmd[3]<<16)|((uint32_t)scsi_cmd[4]<<8)|scsi_cmd[5]; return tud_msc_read10_cb(lun,lba,0,buf,bufsize); }
+    case 0x2A:{ /* WRITE10 — block-aligned, offset always 0 */ uint32_t lba=((uint32_t)scsi_cmd[2]<<24)|((uint32_t)scsi_cmd[3]<<16)|((uint32_t)scsi_cmd[4]<<8)|scsi_cmd[5]; return tud_msc_write10_cb(lun,lba,0,buf,bufsize); }
     case 0x03: memset(buf,0,18); buf[0]=0x70; buf[7]=10; return 18;
     default: return -1;
     }

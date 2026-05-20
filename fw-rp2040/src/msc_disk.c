@@ -11,6 +11,7 @@ void msc_disk_init(void) { /* no init needed — host manages FAT */ }
 int32_t msc_disk_read(uint32_t lba, uint32_t offset, void* buffer, uint32_t bufsize)
 {
     uint32_t addr = MSC_SCRIPT_OFFSET + lba * DISK_SECTOR_SIZE + offset;
+    if (addr + bufsize > MSC_SCRIPT_OFFSET + MSC_SCRIPT_SIZE || addr < MSC_SCRIPT_OFFSET) return -1;
     memcpy(buffer, (const uint8_t*)(XIP_BASE + addr), bufsize);
     return (int32_t)bufsize;
 }
@@ -18,6 +19,7 @@ int32_t msc_disk_read(uint32_t lba, uint32_t offset, void* buffer, uint32_t bufs
 int32_t __not_in_flash_func(msc_disk_write)(uint32_t lba, uint32_t offset, const uint8_t* buffer, uint32_t bufsize)
 {
     uint32_t addr = MSC_SCRIPT_OFFSET + lba * DISK_SECTOR_SIZE + offset;
+    if (addr + bufsize > MSC_SCRIPT_OFFSET + MSC_SCRIPT_SIZE || addr < MSC_SCRIPT_OFFSET) return -1;
     uint32_t ints = save_and_disable_interrupts();
     flash_range_erase(addr, (bufsize + FLASH_SECTOR_SIZE - 1) & ~(FLASH_SECTOR_SIZE - 1));
     flash_range_program(addr, buffer, bufsize);

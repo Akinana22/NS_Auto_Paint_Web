@@ -95,6 +95,8 @@ bool cdc_script_erase(void)
     return true;
 }
 
+// cdc_script_write() superseded by CDC streaming upload in main.c
+#if 0
 bool cdc_script_write(const uint8_t* data, uint32_t size, uint32_t checksum)
 {
     if (size > CDC_SCRIPT_SIZE - SCRIPT_HEADER_SECTOR) return false;
@@ -112,6 +114,7 @@ bool cdc_script_write(const uint8_t* data, uint32_t size, uint32_t checksum)
     flash_raw_program(CDC_SCRIPT_OFFSET, buf, total);
     return true;
 }
+#endif
 
 // ============ MSC Script Partition ============
 
