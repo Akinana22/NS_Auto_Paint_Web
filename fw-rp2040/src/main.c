@@ -29,6 +29,7 @@ extern int current_mode;  // defined in usb_descriptors.c
 // ==== State ====
 static controller_report_t hid_report;
 static script_engine_t engine;
+static uint8_t script_ram[SCRIPT_SEGMENT_MAX_SIZE];
 static volatile bool script_running = false;
 static bool hid_connected = false;
 
@@ -122,7 +123,7 @@ static void cdc_process_cmd(const char* cmd) {
         unsigned int crc;
         if (cdc_upload_offset == cdc_upload_size && cdc_upload_size > 0 && sscanf(cmd + 4, "%x", &crc) == 1) {
             if ((cdc_crc ^ 0xFFFFFFFF) == (uint32_t)crc) {
-                script_header_t hdr = { SCRIPT_MAGIC, 1, cdc_upload_size, crc, 0, 0 };
+                script_header_t hdr = { SCRIPT_MAGIC, SCRIPT_PROTO_VERSION, cdc_upload_size, crc, 0, 0 };
                 uint8_t page[256]; memcpy(page, &hdr, sizeof(hdr));
                 memset(page + sizeof(hdr), 0xFF, 256 - sizeof(hdr));
                 flash_raw_erase(CDC_SCRIPT_OFFSET, FLASH_SECTOR_SIZE);
@@ -222,7 +223,7 @@ int main(void) {
     add_repeating_timer_ms(1, ms_timer_callback, NULL, &_ms_timer);
 
     reset_hid_report();
-    script_engine_init(&engine, apply_report, get_ms);
+    script_engine_init(&engine, apply_report, get_ms, script_ram, SCRIPT_SEGMENT_MAX_SIZE);
 
     // 2. 加载脚本
     if (current_mode == MODE_HID_CDC && cdc_script_has_valid()) {

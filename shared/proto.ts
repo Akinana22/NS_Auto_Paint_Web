@@ -1,15 +1,20 @@
-/** 二进制脚本指令协议 — 前后端 + 固件共享定义 */
+/** 二进制脚本指令协议 — 前后端 + 固件共享定义 (v4.0) */
 
 export const enum OpCode {
-  WAIT = 0x00,        // + duration_ms:2B LE
-  BTN_PRESS = 0x01,   // + buttons:2B LE → press immediately (timing by script)
-  BTN_DOWN = 0x02,    // + buttons:2B LE → 持续按下
-  BTN_UP = 0x03,      // + 无参数 → 释放所有按键
-  DPAD = 0x04,        // + hat:1B
-  LSTICK = 0x05,      // + lx:1B ly:1B duration_ms:2B LE
-  RSTICK = 0x06,      // + rx:1B ry:1B duration_ms:2B LE
-  LOOP = 0x07,        // + count:2B LE addr:4B LE (flash offset)
-  END = 0xFF,         // 脚本结束
+  WAIT       = 0x00, // + dur_ms:2B LE
+  BTN_PRESS  = 0x01, // + btn:2B LE
+  BTN_DOWN   = 0x02, // + btn:2B LE (additive |=)
+  BTN_UP     = 0x03, // release all
+  DPAD       = 0x04, // + hat:1B
+  LSTICK     = 0x05, // + lx:1B ly:1B dur_ms:2B LE
+  RSTICK     = 0x06, // + rx:1B ry:1B dur_ms:2B LE
+  // 0x07 removed (was LOOP)
+  BTN_TAP    = 0x08, // + btn:2B LE dur_ms:2B LE (press→wait→release)
+  DPAD_TAP   = 0x09, // + hat:1B dur_ms:2B LE (hat→wait→center)
+  NEXT       = 0x0A, // load next segment
+  BTN_REL    = 0x0B, // + btn:2B LE (release specific buttons)
+  REPEAT     = 0x0C, // + count:2B LE (repeat next instruction)
+  END        = 0xFF,
 }
 
 /** Switch 按钮位掩码 (与 USB HID report 一致) */
@@ -50,20 +55,27 @@ export const STICK_MAX = 255;
 
 /** Flash 脚本存储地址 — CDC 脚本区 (0x0C0000) */
 export const FLASH_SCRIPT_OFFSET = 0x0C0000;
-export const FLASH_SCRIPT_MAX_SIZE = 512 * 1024; // 512KB
+export const FLASH_SCRIPT_MAX_SIZE = 512 * 1024;
 
 /** 脚本文件魔术字 + 头部 */
 export const SCRIPT_MAGIC = 0x4E534150; // "NSAP"
+export const SCRIPT_PROTO_VERSION = 2;
 export interface ScriptHeader {
-  magic: number;       // SCRIPT_MAGIC
-  version: number;     // 协议版本
-  size: number;        // 脚本数据字节数
-  checksum: number;    // CRC32
-  frameCount: number;  // 预估帧数
-  estimatedMs: number; // 预估耗时(ms)
+  magic: number;
+  version: number;
+  size: number;
+  checksum: number;
+  frameCount: number;
+  estimatedMs: number;
 }
 
-/** 脚本头部大小 */
 export const SCRIPT_HEADER_SIZE = 24;
-/** 头部独占一个 Flash 扇区 (4KB), body 从下一扇区开始 */
 export const SCRIPT_HEADER_SECTOR = 4096;
+
+/** 分段目录 (version=2) */
+export const SCRIPT_SEGMENT_MAX_SIZE = 64 * 1024;
+export const SCRIPT_MAX_SEGMENTS = 32;
+export interface ScriptSegEntry {
+  offset: number; // relative to body start
+  size: number;
+}

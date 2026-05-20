@@ -1,6 +1,6 @@
 /**
- * NS Auto Painter — 固件协议定义 v3.0
- * RP2040 Pico C header — 分区布局 / 模式枚举 / 脚本结构
+ * NS Auto Painter — 固件协议定义 v4.0
+ * RP2040 Pico C header — 分区布局 / 模式枚举 / 脚本结构 / 操作码
  */
 
 #ifndef PROTO_H
@@ -10,10 +10,10 @@
 
 // ================ BOOTSEL Mode ================
 enum BootMode {
-    MODE_NONE     = -1,  // 未检测到有效按键
-    MODE_HID_CDC  = 0,   // 短按1下 → 加载CDC脚本 → 纯HID
-    MODE_HID_MSC  = 1,   // 短按2下 → 加载MSC脚本 → 纯HID
-    MODE_CDC_MSC  = 2,   // 长按>2s → CDC+MSC复合 → 脚本更新
+    MODE_NONE     = -1,
+    MODE_HID_CDC  = 0,
+    MODE_HID_MSC  = 1,
+    MODE_CDC_MSC  = 2,
 };
 
 // ================ Flash Layout (2MB) ================
@@ -35,17 +35,35 @@ enum BootMode {
 #define LOG_OFFSET          0x1C0000
 #define LOG_SIZE            (256 * 1024)
 
+// ================ Script Protocol Version ================
+#define SCRIPT_PROTO_VERSION 2
+
 // ================ Binary Script Opcodes ================
 enum OpCode {
     OP_WAIT       = 0x00,
     OP_BTN_PRESS  = 0x01,
-    OP_BTN_DOWN   = 0x02,
+    OP_BTN_DOWN   = 0x02,  // additive (|=)
     OP_BTN_UP     = 0x03,
     OP_DPAD       = 0x04,
     OP_LSTICK     = 0x05,
     OP_RSTICK     = 0x06,
-    OP_LOOP       = 0x07,
+    // 0x07 removed (was OP_LOOP)
+    OP_BTN_TAP    = 0x08,
+    OP_DPAD_TAP   = 0x09,
+    OP_NEXT       = 0x0A,
+    OP_BTN_REL    = 0x0B,
+    OP_REPEAT     = 0x0C,
     OP_END        = 0xFF,
+};
+
+// ================ Wait Type (for unified timer resolution) ================
+enum WaitType {
+    WAIT_NONE      = 0,
+    WAIT_PLAIN     = 1,
+    WAIT_STICK_L   = 2,
+    WAIT_STICK_R   = 3,
+    WAIT_BTN_TAP   = 4,
+    WAIT_DPAD_TAP  = 5,
 };
 
 // ================ Button Masks ================
@@ -80,7 +98,7 @@ enum BtnMask {
 // ================ Script Header ================
 #define SCRIPT_MAGIC      0x4E534150  // "NSAP"
 #define SCRIPT_HEADER_SIZE sizeof(script_header_t)
-#define SCRIPT_HEADER_SECTOR 4096       // header resides in its own sector
+#define SCRIPT_HEADER_SECTOR 4096
 
 #pragma pack(push, 1)
 typedef struct {
@@ -91,6 +109,17 @@ typedef struct {
     uint32_t frameCount;
     uint32_t estimatedMs;
 } script_header_t;
+#pragma pack(pop)
+
+// ================ Segment Directory (v2 only) ================
+#define SCRIPT_SEGMENT_MAX_SIZE (64 * 1024)
+#define SCRIPT_MAX_SEGMENTS 32
+
+#pragma pack(push, 1)
+typedef struct {
+    uint32_t offset;  // relative to body start
+    uint32_t size;    // bytes
+} script_seg_entry_t;
 #pragma pack(pop)
 
 // ================ Controller Report ================
