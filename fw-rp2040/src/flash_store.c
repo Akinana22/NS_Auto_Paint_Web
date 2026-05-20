@@ -1,143 +1,157 @@
-/**
- * Flash 存储实现 — 使用 RP2040 flash API
- */
+/** Flash 存储实现 — 5区布局 + XIP 读取 + 擦写保护 */
 #include "flash_store.h"
+#include "pico/stdlib.h"
 #include "hardware/flash.h"
 #include "hardware/sync.h"
 #include <string.h>
 #include <stdio.h>
 
-// The script storage is in the last portion of flash
-// RP2040 has 2MB flash: 0x10000000 to 0x10200000
-// We reserve the last 512KB for script storage: 0x10180000 to 0x10200000
-// (1.5MB for firmware, 512KB for scripts)
-#define SCRIPT_FLASH_OFFSET FLASH_SCRIPT_OFFSET
-
-static bool has_script = false;
-static uint32_t script_size = 0;
-static script_header_t cached_header;
-
+// ============ CRC32 table ============
 static uint32_t _crc32_table[256];
-static bool _crc_table_ready = false;
+static bool _crc_ready = false;
 
-static void _build_crc32_table(void) {
+static void _build_crc32(void)
+{
     for (uint32_t i = 0; i < 256; i++) {
         uint32_t crc = i;
-        for (int j = 0; j < 8; j++) {
+        for (int j = 0; j < 8; j++)
             crc = (crc >> 1) ^ (crc & 1 ? 0xEDB88320 : 0);
-        }
         _crc32_table[i] = crc;
     }
-    _crc_table_ready = true;
+    _crc_ready = true;
 }
 
-uint32_t flash_store_crc32(const uint8_t* data, uint32_t len) {
-    if (!_crc_table_ready) _build_crc32_table();
+uint32_t flash_store_crc32(const uint8_t* data, uint32_t len)
+{
+    if (!_crc_ready) _build_crc32();
     uint32_t crc = 0xFFFFFFFF;
-    for (uint32_t i = 0; i < len; i++) {
+    for (uint32_t i = 0; i < len; i++)
         crc = _crc32_table[(crc ^ data[i]) & 0xFF] ^ (crc >> 8);
-    }
     return crc ^ 0xFFFFFFFF;
 }
 
-static void _read_header(void) {
-    const uint8_t* flash_addr = (const uint8_t*)(XIP_BASE + SCRIPT_FLASH_OFFSET);
-    memcpy(&cached_header, flash_addr, sizeof(script_header_t));
+// ============ Raw Flash Access ============
+void __not_in_flash_func(flash_raw_erase)(uint32_t offset, uint32_t len)
+{
+    uint32_t ints = save_and_disable_interrupts();
+    flash_range_erase(offset, (len + FLASH_SECTOR_SIZE - 1) & ~(FLASH_SECTOR_SIZE - 1));
+    restore_interrupts(ints);
 }
 
-void flash_store_init(void) {
-    _read_header();
-
-    if (cached_header.magic != SCRIPT_MAGIC) {
-        has_script = false;
-        script_size = 0;
-        return;
-    }
-
-    // Validate size
-    if (cached_header.size > FLASH_SCRIPT_MAX_SIZE) {
-        has_script = false;
-        script_size = 0;
-        return;
-    }
-
-    // Validate checksum
-    const uint8_t* script_data = (const uint8_t*)(XIP_BASE + SCRIPT_FLASH_OFFSET + SCRIPT_HEADER_SIZE);
-    uint32_t calc_crc = flash_store_crc32(script_data, cached_header.size);
-    if (calc_crc != cached_header.checksum) {
-        has_script = false;
-        script_size = 0;
-        return;
-    }
-
-    has_script = true;
-    script_size = cached_header.size;
+void __not_in_flash_func(flash_raw_program)(uint32_t offset, const uint8_t* data, uint32_t len)
+{
+    uint32_t ints = save_and_disable_interrupts();
+    flash_range_program(offset, data, len);
+    restore_interrupts(ints);
 }
 
-bool flash_store_has_script(void) { return has_script; }
-
-const uint8_t* flash_store_get_script_ptr(void) {
-    return (const uint8_t*)(XIP_BASE + SCRIPT_FLASH_OFFSET + SCRIPT_HEADER_SIZE);
+void flash_raw_read(uint32_t offset, uint8_t* buf, uint32_t len)
+{
+    const uint8_t* src = (const uint8_t*)(XIP_BASE + offset);
+    memcpy(buf, src, len);
 }
 
-uint32_t flash_store_get_script_size(void) { return script_size; }
+// ============ CDC Script Partition ============
 
-const script_header_t* flash_store_get_header(void) {
-    return &cached_header;
+void flash_store_init(void) { /* header validation done per-partition on access */ }
+
+static bool _validate_header(uint32_t offset, script_header_t* out)
+{
+    flash_raw_read(offset, (uint8_t*)out, sizeof(script_header_t));
+    if (out->magic != SCRIPT_MAGIC) return false;
+    if (out->size > CDC_SCRIPT_SIZE - SCRIPT_HEADER_SIZE) return false;
+
+    uint8_t* body = (uint8_t*)(XIP_BASE + offset + SCRIPT_HEADER_SIZE);
+    uint32_t calc = flash_store_crc32(body, out->size);
+    return calc == out->checksum;
 }
 
-bool flash_store_write_script(const uint8_t* data, uint32_t size, uint32_t checksum) {
-    if (size > FLASH_SCRIPT_MAX_SIZE) return false;
+bool cdc_script_has_valid(void)
+{
+    script_header_t hdr;
+    return _validate_header(CDC_SCRIPT_OFFSET, &hdr);
+}
 
-    // Prepare header
-    script_header_t header;
-    header.magic = SCRIPT_MAGIC;
-    header.version = 1;
-    header.size = size;
-    header.checksum = checksum;
-    header.frameCount = 0;
-    header.estimatedMs = 0;
+uint32_t cdc_script_get_size(void)
+{
+    script_header_t hdr;
+    flash_raw_read(CDC_SCRIPT_OFFSET, (uint8_t*)&hdr, sizeof(hdr));
+    return (hdr.magic == SCRIPT_MAGIC) ? hdr.size : 0;
+}
 
-    uint32_t total_size = SCRIPT_HEADER_SIZE + size;
-    // Round up to 256-byte boundary (minimum erase unit)
-    uint32_t flash_size = (total_size + 255) & ~255;
-    if (flash_size < FLASH_PAGE_SIZE) flash_size = FLASH_PAGE_SIZE;
+const script_header_t* cdc_script_get_header(void)
+{
+    return (const script_header_t*)(XIP_BASE + CDC_SCRIPT_OFFSET);
+}
 
-    // Prepare write buffer
-    // (allocate on stack — careful with size, keep script writes small or use heap)
-    uint8_t buffer[4096]; // 4KB buffer, enough for header + reasonable script chunks
-    if (total_size > sizeof(buffer)) {
-        // Script too large for single buffer — use streaming write
-        // For simplicity, limit to 4KB initially
-        return false;
-    }
+const uint8_t* cdc_script_get_ptr(void)
+{
+    return (const uint8_t*)(XIP_BASE + CDC_SCRIPT_OFFSET + SCRIPT_HEADER_SIZE);
+}
 
-    memset(buffer, 0xFF, flash_size);
-    memcpy(buffer, &header, sizeof(script_header_t));
-    memcpy(buffer + SCRIPT_HEADER_SIZE, data, size);
-
-    // Erase and write
-    uint32_t status = save_and_disable_interrupts();
-    flash_range_erase(SCRIPT_FLASH_OFFSET, flash_size);
-    flash_range_program(SCRIPT_FLASH_OFFSET, buffer, flash_size);
-    restore_interrupts(status);
-
-    // Re-read and verify
-    _read_header();
-    if (cached_header.magic != SCRIPT_MAGIC || cached_header.checksum != checksum) {
-        has_script = false;
-        return false;
-    }
-
-    has_script = true;
-    script_size = size;
+bool cdc_script_erase(void)
+{
+    flash_raw_erase(CDC_SCRIPT_OFFSET, FLASH_SECTOR_SIZE);
     return true;
 }
 
-void flash_store_erase(void) {
-    uint32_t status = save_and_disable_interrupts();
-    flash_range_erase(SCRIPT_FLASH_OFFSET, FLASH_SECTOR_SIZE);
-    restore_interrupts(status);
-    has_script = false;
-    script_size = 0;
+bool cdc_script_write(const uint8_t* data, uint32_t size, uint32_t checksum)
+{
+    if (size > CDC_SCRIPT_SIZE - SCRIPT_HEADER_SIZE) return false;
+
+    script_header_t hdr = { SCRIPT_MAGIC, 1, size, checksum, 0, 0 };
+    uint32_t total = SCRIPT_HEADER_SIZE + size;
+
+    uint8_t buf[32768];
+    if (total > sizeof(buf)) return false;
+    memset(buf, 0xFF, sizeof(buf));
+    memcpy(buf, &hdr, SCRIPT_HEADER_SIZE);
+    memcpy(buf + SCRIPT_HEADER_SIZE, data, size);
+
+    flash_raw_erase(CDC_SCRIPT_OFFSET, total);
+    flash_raw_program(CDC_SCRIPT_OFFSET, buf, total);
+    return true;
+}
+
+// ============ MSC Script Partition ============
+
+bool msc_script_has_valid(void)
+{
+    script_header_t hdr;
+    return _validate_header(MSC_SCRIPT_OFFSET, &hdr);
+}
+
+uint32_t msc_script_get_size(void)
+{
+    script_header_t hdr;
+    flash_raw_read(MSC_SCRIPT_OFFSET, (uint8_t*)&hdr, sizeof(hdr));
+    return (hdr.magic == SCRIPT_MAGIC) ? hdr.size : 0;
+}
+
+const script_header_t* msc_script_get_header(void)
+{
+    return (const script_header_t*)(XIP_BASE + MSC_SCRIPT_OFFSET);
+}
+
+const uint8_t* msc_script_get_ptr(void)
+{
+    return (const uint8_t*)(XIP_BASE + MSC_SCRIPT_OFFSET + SCRIPT_HEADER_SIZE);
+}
+
+int32_t msc_script_read_sectors(uint32_t sector, uint32_t count, void* buf)
+{
+    if (sector + count > MSC_SCRIPT_SECTORS) return -1;
+    uint32_t addr = MSC_SCRIPT_OFFSET + sector * 512;
+    memcpy(buf, (const uint8_t*)(XIP_BASE + addr), count * 512);
+    return (int32_t)(count * 512);
+}
+
+int32_t __not_in_flash_func(msc_script_write_sectors)(uint32_t sector, uint32_t count, const void* buf)
+{
+    if (sector + count > MSC_SCRIPT_SECTORS) return -1;
+    uint32_t addr = MSC_SCRIPT_OFFSET + sector * 512;
+    uint32_t len = count * 512;
+    flash_raw_erase(addr, len);
+    flash_raw_program(addr, (const uint8_t*)buf, len);
+    return (int32_t)len;
 }

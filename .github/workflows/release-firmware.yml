@@ -27,6 +27,9 @@ jobs:
           cd /opt/pico-sdk
           git submodule update --init lib/tinyusb
 
+      - name: Static check
+        run: bash fw-rp2040/check.sh
+
       - name: Build firmware
         run: |
           mkdir -p fw-rp2040/build
@@ -39,12 +42,14 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: fw-rp2040/build/*.uf2
-          name: Firmware ${{ github.run_number }}
-          tag_name: firmware-v${{ github.run_number }}
+          name: firmware-v0.1
+          tag_name: v0.1
           body: |
-            NS Auto Painter RP2040 固件
+            NS Auto Painter RP2040 v0.1
 
-            - 基于 SwiCC_RP2040 框架
-            - USB HID + CDC 复合设备
-            - 支持 Flash 脚本存储与自动执行
+            - BOOTSEL 按键模式切换 (短按/双击/长按)
+            - USB 动态配置 (HID only / CDC+MSC)
+            - Flash 5区布局 (固件/备用/CDC脚本/MSC脚本/日志)
+            - 脚本引擎 + CDC/MSC 双通道脚本更新
+            - LittleFS 日志系统
           token: ${{ secrets.GITHUB_TOKEN }}
