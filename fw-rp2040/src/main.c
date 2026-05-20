@@ -29,7 +29,7 @@ extern int current_mode;  // defined in usb_descriptors.c
 // ==== State ====
 static controller_report_t hid_report;
 static script_engine_t engine;
-static bool script_running = false;
+static volatile bool script_running = false;
 static bool hid_connected = false;
 
 // CDC upload

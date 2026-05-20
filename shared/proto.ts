@@ -2,7 +2,7 @@
 
 export const enum OpCode {
   WAIT = 0x00,        // + duration_ms:2B LE
-  BTN_PRESS = 0x01,   // + buttons:2B LE → press_hold + release
+  BTN_PRESS = 0x01,   // + buttons:2B LE → press immediately (timing by script)
   BTN_DOWN = 0x02,    // + buttons:2B LE → 持续按下
   BTN_UP = 0x03,      // + 无参数 → 释放所有按键
   DPAD = 0x04,        // + hat:1B

@@ -42,7 +42,7 @@ static bool execute_op(script_engine_t* eng) {
         uint16_t dur = read_u16(buf, &pc); if (dur == 0) { eng->pc = pc; return true; }
         eng->wait_until = eng->get_ms() + dur; eng->waiting = true; eng->pc = pc; return false;
     }
-    case OP_BTN_PRESS: { uint16_t btn = read_u16(buf, &pc); eng->current.buttons = btn; if (eng->apply) eng->apply(&eng->current); eng->wait_until = eng->get_ms() + DEFAULT_PRESS_HOLD_MS; eng->waiting = true; eng->held_buttons = btn; eng->pc = pc; return false; }
+    case OP_BTN_PRESS: { uint16_t btn = read_u16(buf, &pc); eng->current.buttons = btn; if (eng->apply) eng->apply(&eng->current); eng->pc = pc; return true; }
     case OP_BTN_DOWN:  { uint16_t btn = read_u16(buf, &pc); eng->current.buttons = btn; eng->held_buttons = btn; if (eng->apply) eng->apply(&eng->current); eng->pc = pc; return true;  }
     case OP_BTN_UP:    { eng->current.buttons = 0; eng->held_buttons = 0; if (eng->apply) eng->apply(&eng->current); eng->pc = pc; return true;  }
     case OP_DPAD:      { eng->current.hat = buf[pc++]; if (eng->apply) eng->apply(&eng->current); eng->pc = pc; return true;  }
@@ -55,14 +55,16 @@ static bool execute_op(script_engine_t* eng) {
 
 bool script_engine_tick(script_engine_t* eng) {
     if (!eng->running) return false;
-    if (eng->waiting && eng->held_buttons > 0 && eng->held_buttons != 0xFFFF) {
-        if (eng->get_ms() >= eng->wait_until) { eng->current.buttons = 0; eng->held_buttons = 0; if (eng->apply) eng->apply(&eng->current); eng->waiting = false; eng->wait_until = eng->get_ms() + DEFAULT_KEY_INTERVAL_MS; eng->waiting = true; eng->held_buttons = 0xFFFE; } return true;
-    }
+    // Stick duration timeout → reset all 4 axes
     if (eng->waiting && eng->held_buttons == 0xFFFF) {
-        if (eng->get_ms() >= eng->wait_until) { eng->current.lx = STICK_CENTER; eng->current.ly = STICK_CENTER; eng->current.rx = STICK_CENTER; eng->current.ry = STICK_CENTER; eng->held_buttons = 0; if (eng->apply) eng->apply(&eng->current); eng->waiting = false; } return true;
-    }
-    if (eng->waiting && eng->held_buttons == 0xFFFE) {
-        if (eng->get_ms() >= eng->wait_until) { eng->waiting = false; eng->held_buttons = 0; } return true;
+        if (eng->get_ms() >= eng->wait_until) {
+            eng->current.lx = STICK_CENTER; eng->current.ly = STICK_CENTER;
+            eng->current.rx = STICK_CENTER; eng->current.ry = STICK_CENTER;
+            eng->held_buttons = 0;
+            if (eng->apply) eng->apply(&eng->current);
+            eng->waiting = false;
+        }
+        return true;
     }
     while (eng->running) { if (!execute_op(eng)) break; }
     return eng->running;

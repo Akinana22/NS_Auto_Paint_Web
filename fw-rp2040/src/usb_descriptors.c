@@ -33,7 +33,8 @@ uint8_t const * tud_descriptor_device_cb(void) {
 uint8_t const desc_hid_report[] = { TUD_HID_REPORT_DESC_NSAP() };
 
 // ---- Dynamic Configuration Descriptor ----
-enum { ITF_HID, ITF_CDC, ITF_CDC_DATA, ITF_MSC, ITF_MAX };
+enum { ITF_HID = 0 };                                // HID-only mode: 1 interface
+enum { ITF_CDC = 0, ITF_CDC_DATA, ITF_MSC, CDCMSC_MAX }; // CDC+MSC: 3 interfaces
 
 #define EPNUM_HID_OUT    0x01
 #define EPNUM_HID_IN     0x81
@@ -49,11 +50,10 @@ static uint8_t const hid_only_config[] = {
     TUD_HID_DESCRIPTOR(ITF_HID, 0, false, sizeof(desc_hid_report), EPNUM_HID_OUT, CFG_TUD_HID_EP_BUFSIZE, 8),
 };
 
-// CDC+MSC+HID configuration
+// CDC+MSC configuration (no HID)
 static uint8_t const cdc_msc_config[] = {
-    TUD_CONFIG_DESCRIPTOR(1, ITF_MAX, 0,
-        TUD_CONFIG_DESC_LEN + TUD_HID_DESC_LEN + TUD_CDC_DESC_LEN + TUD_MSC_DESC_LEN, 0, 500),
-    TUD_HID_DESCRIPTOR(ITF_HID, 0, false, sizeof(desc_hid_report), EPNUM_HID_OUT, CFG_TUD_HID_EP_BUFSIZE, 8),
+    TUD_CONFIG_DESCRIPTOR(1, CDCMSC_MAX, 0,
+        TUD_CONFIG_DESC_LEN + TUD_CDC_DESC_LEN + TUD_MSC_DESC_LEN, 0, 500),
     TUD_CDC_DESCRIPTOR(ITF_CDC, 0, EPNUM_CDC_NOTIF, 8, EPNUM_CDC_OUT, EPNUM_CDC_IN, CFG_TUD_CDC_RX_BUFSIZE),
     TUD_MSC_DESCRIPTOR(ITF_MSC, 0, EPNUM_MSC_OUT, EPNUM_MSC_IN, CFG_TUD_MSC_EP_BUFSIZE),
 };
