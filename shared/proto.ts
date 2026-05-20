@@ -65,3 +65,5 @@ export interface ScriptHeader {
 
 /** 脚本头部大小 */
 export const SCRIPT_HEADER_SIZE = 24;
+/** 头部独占一个 Flash 扇区 (4KB), body 从下一扇区开始 */
+export const SCRIPT_HEADER_SECTOR = 4096;

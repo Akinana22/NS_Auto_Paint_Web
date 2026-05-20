@@ -41,6 +41,7 @@ static bool     cdc_uploading = false;
 static uint8_t  cdc_page_buf[256];
 static uint8_t  cdc_page_pos  = 0;
 static uint32_t cdc_crc = 0;
+static uint32_t cdc_erased_sector = 0xFFFFFFFF; // lazy sector erase tracker
 
 // CRC32 table for streaming
 static uint32_t _crc32_tab[256];
@@ -108,11 +109,12 @@ static void cdc_process_cmd(const char* cmd) {
         cdc_respond("OK:ERASED\n");
     } else if (strncmp(cmd, "WRITE:", 6) == 0) {
         unsigned int size;
-        if (sscanf(cmd + 6, "%x", &size) == 1 && size <= CDC_SCRIPT_SIZE - SCRIPT_HEADER_SIZE) {
+        if (sscanf(cmd + 6, "%x", &size) == 1 && size <= CDC_SCRIPT_SIZE - SCRIPT_HEADER_SECTOR) {
             cdc_script_erase();
             cdc_upload_size = size; cdc_upload_offset = 0;
             cdc_page_pos = 0; cdc_uploading = true;
             cdc_crc = 0xFFFFFFFF;
+            cdc_erased_sector = 0xFFFFFFFF;
             if (!_crc32_tab_ready) _init_crc32_tab();
             cdc_respond("OK:READY_FOR_DATA\n");
         } else cdc_respond("ERR:BAD_SIZE\n");
@@ -121,8 +123,10 @@ static void cdc_process_cmd(const char* cmd) {
         if (cdc_upload_offset == cdc_upload_size && cdc_upload_size > 0 && sscanf(cmd + 4, "%x", &crc) == 1) {
             if ((cdc_crc ^ 0xFFFFFFFF) == (uint32_t)crc) {
                 script_header_t hdr = { SCRIPT_MAGIC, 1, cdc_upload_size, crc, 0, 0 };
-                flash_raw_erase(CDC_SCRIPT_OFFSET, SCRIPT_HEADER_SIZE);
-                flash_raw_program(CDC_SCRIPT_OFFSET, (uint8_t*)&hdr, SCRIPT_HEADER_SIZE);
+                uint8_t page[256]; memcpy(page, &hdr, sizeof(hdr));
+                memset(page + sizeof(hdr), 0xFF, 256 - sizeof(hdr));
+                flash_raw_erase(CDC_SCRIPT_OFFSET, FLASH_SECTOR_SIZE);
+                flash_raw_program(CDC_SCRIPT_OFFSET, page, 256);
                 cdc_respond("OK:WRITTEN\n");
             } else cdc_respond("ERR:CRC_MISMATCH\n");
         } else cdc_respond("ERR:BAD_CRC\n");
@@ -136,26 +140,26 @@ void tud_cdc_rx_cb(uint8_t itf) {
     uint32_t count = tud_cdc_n_read(0, buf, sizeof(buf));
     for (uint32_t i = 0; i < count; i++) {
         if (cdc_uploading) {
-            // Streaming: accumulate into 256B page, write to flash when full, update CRC
             cdc_page_buf[cdc_page_pos++] = buf[i];
             if (!_crc32_tab_ready) _init_crc32_tab();
             cdc_crc = _crc32_tab[(cdc_crc ^ buf[i]) & 0xFF] ^ (cdc_crc >> 8);
-            if (cdc_page_pos == 256) {
-                uint32_t addr = CDC_SCRIPT_OFFSET + SCRIPT_HEADER_SIZE + cdc_upload_offset;
-                flash_raw_erase(addr, 256);
-                flash_raw_program(addr, cdc_page_buf, 256);
-                cdc_upload_offset += 256;
-                cdc_page_pos = 0;
-            }
-            if (cdc_upload_offset + cdc_page_pos >= cdc_upload_size) {
-                uint32_t remaining = cdc_upload_size - cdc_upload_offset;
-                if (remaining > 0) {
-                    uint32_t addr = CDC_SCRIPT_OFFSET + SCRIPT_HEADER_SIZE + cdc_upload_offset;
-                    flash_raw_erase(addr, (remaining + FLASH_SECTOR_SIZE - 1) & ~(FLASH_SECTOR_SIZE - 1));
-                    flash_raw_program(addr, cdc_page_buf, remaining);
+
+            if (cdc_page_pos == 256 || cdc_upload_offset + cdc_page_pos >= cdc_upload_size) {
+                uint32_t write_addr = CDC_SCRIPT_OFFSET + SCRIPT_HEADER_SECTOR + cdc_upload_offset;
+                uint32_t sector_addr = write_addr & ~(FLASH_SECTOR_SIZE - 1);
+
+                if (sector_addr != cdc_erased_sector) {
+                    flash_raw_erase(sector_addr, FLASH_SECTOR_SIZE);
+                    cdc_erased_sector = sector_addr;
                 }
-                cdc_upload_offset = cdc_upload_size;
-                cdc_uploading = false;
+
+                uint32_t wlen = cdc_page_pos;
+                if (wlen < 256) memset(cdc_page_buf + wlen, 0xFF, 256 - wlen);
+                flash_raw_program(write_addr, cdc_page_buf, 256);
+                cdc_upload_offset += wlen;
+                cdc_page_pos = 0;
+
+                if (cdc_upload_offset >= cdc_upload_size) cdc_uploading = false;
             }
             continue;
         }

@@ -59,9 +59,9 @@ static bool _validate_header(uint32_t offset, script_header_t* out)
 {
     flash_raw_read(offset, (uint8_t*)out, sizeof(script_header_t));
     if (out->magic != SCRIPT_MAGIC) return false;
-    if (out->size > CDC_SCRIPT_SIZE - SCRIPT_HEADER_SIZE) return false;
+    if (out->size > CDC_SCRIPT_SIZE - SCRIPT_HEADER_SECTOR) return false;
 
-    uint8_t* body = (uint8_t*)(XIP_BASE + offset + SCRIPT_HEADER_SIZE);
+    uint8_t* body = (uint8_t*)(XIP_BASE + offset + SCRIPT_HEADER_SECTOR);
     uint32_t calc = flash_store_crc32(body, out->size);
     return calc == out->checksum;
 }
@@ -86,7 +86,7 @@ const script_header_t* cdc_script_get_header(void)
 
 const uint8_t* cdc_script_get_ptr(void)
 {
-    return (const uint8_t*)(XIP_BASE + CDC_SCRIPT_OFFSET + SCRIPT_HEADER_SIZE);
+    return (const uint8_t*)(XIP_BASE + CDC_SCRIPT_OFFSET + SCRIPT_HEADER_SECTOR);
 }
 
 bool cdc_script_erase(void)
@@ -97,16 +97,16 @@ bool cdc_script_erase(void)
 
 bool cdc_script_write(const uint8_t* data, uint32_t size, uint32_t checksum)
 {
-    if (size > CDC_SCRIPT_SIZE - SCRIPT_HEADER_SIZE) return false;
+    if (size > CDC_SCRIPT_SIZE - SCRIPT_HEADER_SECTOR) return false;
 
     script_header_t hdr = { SCRIPT_MAGIC, 1, size, checksum, 0, 0 };
-    uint32_t total = SCRIPT_HEADER_SIZE + size;
+    uint32_t total = SCRIPT_HEADER_SECTOR + size;
 
     static uint8_t buf[32768];
     if (total > sizeof(buf)) return false;
     memset(buf, 0xFF, sizeof(buf));
     memcpy(buf, &hdr, SCRIPT_HEADER_SIZE);
-    memcpy(buf + SCRIPT_HEADER_SIZE, data, size);
+    memcpy(buf + SCRIPT_HEADER_SECTOR, data, size);
 
     flash_raw_erase(CDC_SCRIPT_OFFSET, total);
     flash_raw_program(CDC_SCRIPT_OFFSET, buf, total);
@@ -135,7 +135,7 @@ const script_header_t* msc_script_get_header(void)
 
 const uint8_t* msc_script_get_ptr(void)
 {
-    return (const uint8_t*)(XIP_BASE + MSC_SCRIPT_OFFSET + SCRIPT_HEADER_SIZE);
+    return (const uint8_t*)(XIP_BASE + MSC_SCRIPT_OFFSET + SCRIPT_HEADER_SECTOR);
 }
 
 int32_t msc_script_read_sectors(uint32_t sector, uint32_t count, void* buf)
