@@ -31,6 +31,7 @@ typedef struct {
     uint32_t        body_size;
     int32_t         seg_count;
     int32_t         seg_index;
+    bool            body_in_ram;  // true=seg_flash is RAM, skip copy in _load_segment
 
     script_apply_fn   apply;
     script_get_ms_fn  get_ms;

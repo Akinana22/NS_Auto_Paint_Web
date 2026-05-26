@@ -16,6 +16,7 @@
 #include "pico/multicore.h"
 #include "hardware/timer.h"
 #include "hardware/watchdog.h"
+#include "hardware/flash.h"
 #include "tusb.h"
 #include "proto.h"
 #include "mode_detect.h"
@@ -75,7 +76,7 @@ static void hid_task(void) {
     report[3] = hid_report.lx; report[4] = hid_report.ly;
     report[5] = hid_report.rx; report[6] = hid_report.ry;
     report[7] = hid_report.vendor;
-    tud_hid_report(1, report, sizeof(report));
+    tud_hid_report(0, report, sizeof(report));
 }
 
 // ==== CDC ====
@@ -147,6 +148,8 @@ void tud_cdc_rx_cb(uint8_t itf) {
                 cdc_upload_offset += wlen;
                 cdc_page_pos = 0;
 
+                if (tud_cdc_n_connected(0)) { tud_cdc_write_str("ACK\n"); tud_cdc_write_flush(); }
+
                 if (cdc_upload_offset >= cdc_upload_size) cdc_uploading = false;
             }
             continue;
@@ -164,6 +167,8 @@ void tud_msc_inquiry_cb(uint8_t lun, uint8_t vid[8], uint8_t pid[16], uint8_t re
 bool tud_msc_test_unit_ready_cb(uint8_t lun) { (void)lun; return true; }
 bool tud_msc_start_stop_cb(uint8_t lun, uint8_t power, bool start, bool eject) { (void)lun; (void)power; (void)start; (void)eject; return true; }
 int32_t tud_msc_scsi_cb(uint8_t lun, uint8_t const scsi_cmd[16], void* buffer, uint16_t bufsize) {
+    // Override default TinyUSB SCSI handler — all commands are dispatched here.
+    // READ10/WRITE10 are handled explicitly (TinyUSB default is not used).
     (void)lun; uint8_t* buf = (uint8_t*)buffer;
     switch (scsi_cmd[0]) {
     case 0x00: return tud_msc_test_unit_ready_cb(lun) ? 0 : -1;
@@ -187,8 +192,13 @@ void core1_task(void) {
     gpio_init(PICO_DEFAULT_LED_PIN); gpio_set_dir(PICO_DEFAULT_LED_PIN, GPIO_OUT);
     uint8_t c = 0;
     while (1) {
-        if (script_running) gpio_put(PICO_DEFAULT_LED_PIN, (c & 0x04) ? 1 : 0);
-        else gpio_put(PICO_DEFAULT_LED_PIN, (c & 0x10) ? 1 : 0);
+        if (current_mode == MODE_CDC_MSC) {
+            gpio_put(PICO_DEFAULT_LED_PIN, 1);
+        } else if (script_running) {
+            gpio_put(PICO_DEFAULT_LED_PIN, (c & 0x04) ? 1 : 0);
+        } else {
+            gpio_put(PICO_DEFAULT_LED_PIN, (c & 0x10) ? 1 : 0);
+        }
         c++; sleep_ms(50);
     }
 }
@@ -202,11 +212,22 @@ int main(void) {
         while (1) { __wfi(); }
     }
 
+    // Flash LED to confirm mode: 1=HID_CDC, 2=HID_MSC, 3=CDC_MSC
+    {
+        gpio_init(PICO_DEFAULT_LED_PIN);
+        gpio_set_dir(PICO_DEFAULT_LED_PIN, GPIO_OUT);
+        int flashes = (current_mode == MODE_CDC_MSC) ? 3 : (current_mode == MODE_HID_MSC) ? 2 : 1;
+        for (int i = 0; i < flashes; i++) {
+            gpio_put(PICO_DEFAULT_LED_PIN, 1); sleep_ms(100);
+            gpio_put(PICO_DEFAULT_LED_PIN, 0); sleep_ms(200);
+        }
+    }
+
     stdio_init_all();
+    multicore_launch_core1(core1_task);
     flash_store_init();
     msc_disk_init();
     log_init();
-    log_event((uint8_t)current_mode);
     add_repeating_timer_ms(1, ms_timer_callback, NULL, &_ms_timer);
 
     reset_hid_report();
@@ -216,13 +237,15 @@ int main(void) {
     if (current_mode == MODE_HID_CDC && cdc_script_has_valid()) {
         script_engine_load(&engine, cdc_script_get_ptr(), cdc_script_get_size());
     } else if (current_mode == MODE_HID_MSC && msc_script_has_valid()) {
+        engine.body_in_ram = true;
         script_engine_load(&engine, msc_script_get_ptr(), msc_script_get_size());
     }
     // MODE_CDC_MSC: no script loaded — just PC communication
 
     // 3. 启动 USB
     tusb_init();
-    multicore_launch_core1(core1_task);
+
+    log_event((uint8_t)current_mode);
 
     const uint32_t tick_us = 16667;
     uint32_t next_tick = time_us_32() + tick_us;
@@ -232,6 +255,12 @@ int main(void) {
     while (1) {
         tud_task();
         hid_task();
+
+        // Runtime BOOTSEL long-press → reboot to re-enter mode selection
+        if (check_bootsel_long_press()) {
+            watchdog_reboot(0, 0, 10);
+            while (1);
+        }
 
         uint32_t now = time_us_32();
         if (time_reached(next_tick)) {

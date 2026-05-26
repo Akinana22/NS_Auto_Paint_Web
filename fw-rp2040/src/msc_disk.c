@@ -1,14 +1,12 @@
 /** MSC 块设备实现 — 直读直写 MSC 脚本分区 Flash
  *
  * Write uses sector-level Read-Modify-Write to preserve adjacent FAT data.
- * XIP cache invalidation is handled automatically by flash_range_erase/program
- * (RP2040 bootrom restores XIP mode and clears cache on return).
+ * Uses flash_raw_erase/program (multicore_lockout protected).
  */
 #include "msc_disk.h"
 #include "pico/stdlib.h"
 #include "flash_store.h"
 #include "hardware/flash.h"
-#include "hardware/sync.h"
 #include <string.h>
 
 void msc_disk_init(void) { /* no init needed — host manages FAT */ }
@@ -38,10 +36,8 @@ int32_t __not_in_flash_func(msc_disk_write)(uint32_t lba, uint32_t offset, const
         memcpy(sec_buf, (const uint8_t*)(XIP_BASE + sector_addr), FLASH_SECTOR_SIZE);
         memcpy(sec_buf + sec_off, buffer + cur_off, chunk);
 
-        uint32_t ints = save_and_disable_interrupts();
-        flash_range_erase(sector_addr, FLASH_SECTOR_SIZE);
-        flash_range_program(sector_addr, sec_buf, FLASH_SECTOR_SIZE);
-        restore_interrupts(ints);
+        flash_raw_erase(sector_addr, FLASH_SECTOR_SIZE);
+        flash_raw_program(sector_addr, sec_buf, FLASH_SECTOR_SIZE);
 
         cur_off += chunk;
     }

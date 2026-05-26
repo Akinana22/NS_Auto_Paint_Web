@@ -1,5 +1,6 @@
 /** Flash 存储实现 — 5区布局 + XIP 读取 + 擦写保护 */
 #include "flash_store.h"
+#include "fat_reader.h"
 #include "pico/stdlib.h"
 #include "hardware/flash.h"
 #include "hardware/sync.h"
@@ -99,33 +100,61 @@ const uint8_t* cdc_script_get_ptr(void)
 
 bool cdc_script_erase(void)
 {
+    // Erase header sector only; body sectors are lazy-erased during streaming write.
     flash_raw_erase(CDC_SCRIPT_OFFSET, FLASH_SECTOR_SIZE);
     return true;
 }
 
-// ============ MSC Script Partition ============
+// ============ MSC Script Partition (FAT16) ============
+
+static uint8_t  msc_file_buf[SCRIPT_SEGMENT_MAX_SIZE];
+static uint32_t msc_file_size = 0;
+static bool     msc_file_loaded = false;
+
+static bool _msc_load_script(void)
+{
+    if (msc_file_loaded) return true;
+    fat_mount_t mnt;
+    fat_file_t  file;
+    fat_init(&mnt);
+    if (!fat_mount(&mnt)) return false;
+    if (!fat_find(&mnt, &file, "SCRIPT.BIN")) return false;
+    uint32_t fsz;
+    if (!fat_file_size(&mnt, &file, &fsz)) return false;
+    if (fsz < SCRIPT_HEADER_SIZE || fsz - SCRIPT_HEADER_SIZE > sizeof(msc_file_buf)) return false;
+    if (!fat_read(&mnt, &file, msc_file_buf, fsz)) return false;
+
+    const script_header_t* hdr = (const script_header_t*)msc_file_buf;
+    if (hdr->magic != SCRIPT_MAGIC) return false;
+    if (hdr->size != fsz - SCRIPT_HEADER_SIZE) return false;
+
+    msc_file_size = fsz;
+    msc_file_loaded = true;
+    return true;
+}
 
 bool msc_script_has_valid(void)
 {
-    script_header_t hdr;
-    return _validate_header(MSC_SCRIPT_OFFSET, MSC_SCRIPT_SIZE, &hdr);
+    if (msc_file_loaded) return true;
+    return _msc_load_script();
 }
 
 uint32_t msc_script_get_size(void)
 {
-    script_header_t hdr;
-    flash_raw_read(MSC_SCRIPT_OFFSET, (uint8_t*)&hdr, sizeof(hdr));
-    return (hdr.magic == SCRIPT_MAGIC) ? hdr.size : 0;
+    if (!msc_script_has_valid()) return 0;
+    return msc_file_size - SCRIPT_HEADER_SIZE;
 }
 
 const script_header_t* msc_script_get_header(void)
 {
-    return (const script_header_t*)(XIP_BASE + MSC_SCRIPT_OFFSET);
+    if (!msc_script_has_valid()) return NULL;
+    return (const script_header_t*)msc_file_buf;
 }
 
 const uint8_t* msc_script_get_ptr(void)
 {
-    return (const uint8_t*)(XIP_BASE + MSC_SCRIPT_OFFSET + SCRIPT_HEADER_SECTOR);
+    if (!msc_script_has_valid()) return NULL;
+    return msc_file_buf + SCRIPT_HEADER_SIZE;
 }
 
 int32_t msc_script_read_sectors(uint32_t sector, uint32_t count, void* buf)

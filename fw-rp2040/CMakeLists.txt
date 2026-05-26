@@ -17,6 +17,7 @@ set(SOURCES
     ${CMAKE_CURRENT_LIST_DIR}/src/msc_disk.c
     ${CMAKE_CURRENT_LIST_DIR}/src/lfs_config.c
     ${CMAKE_CURRENT_LIST_DIR}/src/log.c
+    ${CMAKE_CURRENT_LIST_DIR}/src/fat_reader.c
     ${CMAKE_CURRENT_LIST_DIR}/lib/littlefs/lfs.c
     ${CMAKE_CURRENT_LIST_DIR}/lib/littlefs/lfs_util.c
 )

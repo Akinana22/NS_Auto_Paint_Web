@@ -30,8 +30,12 @@ static void _load_segment(script_engine_t* eng, int32_t idx) {
     memcpy(&seg_sz, flash + entry_off + 4, 4);
     if (seg_sz > eng->seg_ram_size) return;
     if (seg_off + seg_sz > eng->body_size) return;
-    memcpy(eng->seg_ram, flash + seg_off, seg_sz);
-    eng->script_ptr = eng->seg_ram;
+    if (eng->body_in_ram) {
+        eng->script_ptr = flash + seg_off;
+    } else {
+        memcpy(eng->seg_ram, flash + seg_off, seg_sz);
+        eng->script_ptr = eng->seg_ram;
+    }
     eng->script_size = seg_sz;
     eng->pc = 0;
     eng->seg_index = idx;
@@ -102,10 +106,6 @@ static bool execute_op(script_engine_t* eng)
     uint8_t op = buf[pc++];
     switch (op) {
     case OP_WAIT: {
-        if (eng->waiting) {
-            if (eng->get_ms() >= eng->wait_until) { eng->waiting = false; eng->wait_type = WAIT_NONE; eng->pc = pc + 2; return true; }
-            return false;
-        }
         uint16_t dur = read_u16(buf, &pc);
         if (dur == 0) { eng->pc = pc; return true; }
         _start_wait(eng, WAIT_PLAIN, dur, 0);
@@ -223,10 +223,23 @@ static bool execute_op(script_engine_t* eng)
         eng->pc = pc;
         return true;
     }
+    case OP_END:
     default:
         eng->running = false;
         return false;
     }
+}
+
+static bool _handle_repeat(script_engine_t* eng)
+{
+    if (eng->repeat_count > 1) {
+        eng->repeat_count--;
+        eng->pc = eng->repeat_pc;
+        return true;
+    } else if (eng->repeat_count == 1) {
+        eng->repeat_count = 0;
+    }
+    return false;
 }
 
 bool script_engine_tick(script_engine_t* eng)
@@ -257,13 +270,7 @@ bool script_engine_tick(script_engine_t* eng)
             if (eng->apply) eng->apply(&eng->current);
             eng->waiting = false;
 
-            if (eng->repeat_count > 1) {
-                eng->repeat_count--;
-                eng->pc = eng->repeat_pc;
-                return true;
-            } else if (eng->repeat_count == 1) {
-                eng->repeat_count = 0;
-            }
+            if (_handle_repeat(eng)) return true;
         }
         return true;
     }
@@ -271,13 +278,7 @@ bool script_engine_tick(script_engine_t* eng)
     while (eng->running) {
         if (!execute_op(eng)) break;
         if (eng->waiting) break;
-
-        if (eng->repeat_count > 1) {
-            eng->repeat_count--;
-            eng->pc = eng->repeat_pc;
-        } else if (eng->repeat_count == 1) {
-            eng->repeat_count = 0;
-        }
+        _handle_repeat(eng);
     }
     return eng->running;
 }
