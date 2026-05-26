@@ -1,4 +1,4 @@
-/** NS Auto Painter — RP2040 Pico 固件 v3.0
+/** NS Auto Painter — RP2040 Pico 固件 v0.1
  *
  * BOOTSEL 按键模式切换 + USB 动态配置 + Flash 5区布局 + 脚本引擎
  *
@@ -88,7 +88,7 @@ static void cdc_process_cmd(const char* cmd) {
     if (strncmp(cmd, "INFO", 4) == 0) {
         char buf[128];
         snprintf(buf, sizeof(buf),
-            "INFO:NS_Auto_Paint_RP2040 v3.0\nMODE:%d\nCDC_SCRIPT:%s\nMSC_SCRIPT:%s\nHID:%s\nOK\n",
+            "INFO:NS_Auto_Paint_RP2040 v0.1\nMODE:%d\nCDC_SCRIPT:%s\nMSC_SCRIPT:%s\nHID:%s\nOK\n",
             current_mode,
             cdc_script_has_valid() ? "YES" : "NO",
             msc_script_has_valid() ? "YES" : "NO",
@@ -148,8 +148,6 @@ void tud_cdc_rx_cb(uint8_t itf) {
                 cdc_upload_offset += wlen;
                 cdc_page_pos = 0;
 
-                if (tud_cdc_n_connected(0)) { tud_cdc_write_str("ACK\n"); tud_cdc_write_flush(); }
-
                 if (cdc_upload_offset >= cdc_upload_size) cdc_uploading = false;
             }
             continue;
@@ -205,17 +203,29 @@ void core1_task(void) {
 
 // ==== Main ====
 int main(void) {
+    stdio_init_all();
+
+    // Init MSC partition (auto-format on first boot)
+    msc_disk_init();
+
+    // FS ready — quick double flash
+    {
+        gpio_init(PICO_DEFAULT_LED_PIN);
+        gpio_set_dir(PICO_DEFAULT_LED_PIN, GPIO_OUT);
+        gpio_put(PICO_DEFAULT_LED_PIN, 1); sleep_ms(80);
+        gpio_put(PICO_DEFAULT_LED_PIN, 0); sleep_ms(80);
+        gpio_put(PICO_DEFAULT_LED_PIN, 1); sleep_ms(80);
+        gpio_put(PICO_DEFAULT_LED_PIN, 0); sleep_ms(120);
+    }
+
     // 1. BOOTSEL模式检测 (RAM)
     current_mode = detect_mode();
     if (current_mode == MODE_NONE) {
-        // No valid button press — sleep forever
         while (1) { __wfi(); }
     }
 
     // Flash LED to confirm mode: 1=HID_CDC, 2=HID_MSC, 3=CDC_MSC
     {
-        gpio_init(PICO_DEFAULT_LED_PIN);
-        gpio_set_dir(PICO_DEFAULT_LED_PIN, GPIO_OUT);
         int flashes = (current_mode == MODE_CDC_MSC) ? 3 : (current_mode == MODE_HID_MSC) ? 2 : 1;
         for (int i = 0; i < flashes; i++) {
             gpio_put(PICO_DEFAULT_LED_PIN, 1); sleep_ms(100);
@@ -223,10 +233,8 @@ int main(void) {
         }
     }
 
-    stdio_init_all();
     multicore_launch_core1(core1_task);
     flash_store_init();
-    msc_disk_init();
     log_init();
     add_repeating_timer_ms(1, ms_timer_callback, NULL, &_ms_timer);
 

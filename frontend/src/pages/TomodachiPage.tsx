@@ -505,7 +505,7 @@ export default function TomodachiPage() {
         <div className="flex-col">
           <button onClick={handleDisconnectPico}>断开连接</button>
           {binaryData && (
-            <button onClick={handleUploadScript} className="success" disabled={loading}>上传脚本到 Pico</button>
+            <button onClick={handleUploadScript} className="success" disabled={loading}>上传脚本到单片机</button>
           )}
         </div>
       )}

@@ -12,7 +12,7 @@
 
 static void _format_fat12(void)
 {
-    uint8_t buf[FLASH_SECTOR_SIZE]; // 4096 B
+    static uint8_t buf[FLASH_SECTOR_SIZE]; // 4096 B
     memset(buf, 0, sizeof(buf));
 
     // Sector 0: Boot (0x000-0x1FF)
