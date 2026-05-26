@@ -245,8 +245,6 @@ int main(void) {
     // 3. 启动 USB
     tusb_init();
 
-    log_event((uint8_t)current_mode);
-
     const uint32_t tick_us = 16667;
     uint32_t next_tick = time_us_32() + tick_us;
     uint32_t auto_start_delay = 0;
@@ -255,6 +253,15 @@ int main(void) {
     while (1) {
         tud_task();
         hid_task();
+
+        // Deferred boot log — wait ~50 tud_task() cycles for USB enumeration
+        {
+            static uint32_t log_tick = 50;
+            if (log_tick > 0) {
+                log_tick--;
+                if (log_tick == 0) log_event((uint8_t)current_mode);
+            }
+        }
 
         // Runtime BOOTSEL long-press → reboot to re-enter mode selection
         if (check_bootsel_long_press()) {
