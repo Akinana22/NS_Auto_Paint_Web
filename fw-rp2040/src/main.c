@@ -1,13 +1,13 @@
-/** NS Auto Painter — RP2040 Pico 固件 v0.01
+/** NS Auto Painter �?RP2040 Pico 固件 v0.03
  *
- * BOOTSEL 按键模式切换 + USB 动态配置 + Flash 5区布局 + 脚本引擎
+ * BOOTSEL 按键模式切换 + USB 动态配�?+ Flash 5区布局 + 脚本引擎
  *
  * 启动流程:
- *   1. RAM 中检测 BOOTSEL 按键 → 确定模式
- *   2. 初始化 Flash + 日志 + 脚本引擎
- *   3. 根据模式加载对应分区的脚本
+ *   1. RAM 中检�?BOOTSEL 按键 �?确定模式
+ *   2. 初始�?Flash + 日志 + 脚本引擎
+ *   3. 根据模式加载对应分区的脚�?
  *   4. 启动 USB (动态配置描述符)
- *   5. 主循环: HID + 脚本引擎 tick + (CDC / MSC)
+ *   5. 主循�? HID + 脚本引擎 tick + (CDC / MSC)
  */
 
 #include <stdio.h>
@@ -23,7 +23,6 @@
 #include "flash_store.h"
 #include "script_engine.h"
 #include "msc_disk.h"
-#include "log.h"
 
 extern int current_mode;  // defined in usb_descriptors.c
 
@@ -34,7 +33,7 @@ static uint8_t script_ram[SCRIPT_SEGMENT_MAX_SIZE];
 static volatile bool script_running = false;
 static bool hid_connected = false;
 
-// CDC upload — streaming to flash
+// CDC upload �?streaming to flash
 static uint8_t  cdc_cmd_buf[256];
 static uint32_t cdc_cmd_len = 0;
 static uint32_t cdc_upload_size = 0;
@@ -88,7 +87,7 @@ static void cdc_process_cmd(const char* cmd) {
     if (strncmp(cmd, "INFO", 4) == 0) {
         char buf[128];
         snprintf(buf, sizeof(buf),
-            "INFO:NS_Auto_Paint_RP2040 v0.01\nMODE:%d\nCDC_SCRIPT:%s\nMSC_SCRIPT:%s\nHID:%s\nOK\n",
+            "INFO:NS_Auto_Paint_RP2040 v0.03\nMODE:%d\nCDC_SCRIPT:%s\nMSC_SCRIPT:%s\nHID:%s\nOK\n",
             current_mode,
             cdc_script_has_valid() ? "YES" : "NO",
             msc_script_has_valid() ? "YES" : "NO",
@@ -165,7 +164,7 @@ void tud_msc_inquiry_cb(uint8_t lun, uint8_t vid[8], uint8_t pid[16], uint8_t re
 bool tud_msc_test_unit_ready_cb(uint8_t lun) { (void)lun; return true; }
 bool tud_msc_start_stop_cb(uint8_t lun, uint8_t power, bool start, bool eject) { (void)lun; (void)power; (void)start; (void)eject; return true; }
 int32_t tud_msc_scsi_cb(uint8_t lun, uint8_t const scsi_cmd[16], void* buffer, uint16_t bufsize) {
-    // Override default TinyUSB SCSI handler — all commands are dispatched here.
+    // Override default TinyUSB SCSI handler �?all commands are dispatched here.
     // READ10/WRITE10 are handled explicitly (TinyUSB default is not used).
     (void)lun; uint8_t* buf = (uint8_t*)buffer;
     switch (scsi_cmd[0]) {
@@ -174,8 +173,8 @@ int32_t tud_msc_scsi_cb(uint8_t lun, uint8_t const scsi_cmd[16], void* buffer, u
     case 0x1B: return 0;
     case 0x1E: return 0;
     case 0x25: { uint32_t bc; uint16_t bs; tud_msc_capacity_cb(lun,&bc,&bs); uint32_t lba=bc-1; buf[0]=lba>>24;buf[1]=lba>>16;buf[2]=lba>>8;buf[3]=lba; buf[4]=bs>>24;buf[5]=bs>>16;buf[6]=bs>>8;buf[7]=bs; return 8; }
-    case 0x28:{ /* READ10 — block-aligned, offset always 0 */ uint32_t lba=((uint32_t)scsi_cmd[2]<<24)|((uint32_t)scsi_cmd[3]<<16)|((uint32_t)scsi_cmd[4]<<8)|scsi_cmd[5]; return tud_msc_read10_cb(lun,lba,0,buf,bufsize); }
-    case 0x2A:{ /* WRITE10 — block-aligned, offset always 0 */ uint32_t lba=((uint32_t)scsi_cmd[2]<<24)|((uint32_t)scsi_cmd[3]<<16)|((uint32_t)scsi_cmd[4]<<8)|scsi_cmd[5]; return tud_msc_write10_cb(lun,lba,0,buf,bufsize); }
+    case 0x28:{ /* READ10 �?block-aligned, offset always 0 */ uint32_t lba=((uint32_t)scsi_cmd[2]<<24)|((uint32_t)scsi_cmd[3]<<16)|((uint32_t)scsi_cmd[4]<<8)|scsi_cmd[5]; return tud_msc_read10_cb(lun,lba,0,buf,bufsize); }
+    case 0x2A:{ /* WRITE10 �?block-aligned, offset always 0 */ uint32_t lba=((uint32_t)scsi_cmd[2]<<24)|((uint32_t)scsi_cmd[3]<<16)|((uint32_t)scsi_cmd[4]<<8)|scsi_cmd[5]; return tud_msc_write10_cb(lun,lba,0,buf,bufsize); }
     case 0x03: memset(buf,0,18); buf[0]=0x70; buf[7]=10; return 18;
     default: return -1;
     }
@@ -208,7 +207,7 @@ int main(void) {
     // Init MSC partition (auto-format on first boot)
     msc_disk_init();
 
-    // FS ready — quick double flash
+    // FS ready �?quick double flash
     {
         gpio_init(PICO_DEFAULT_LED_PIN);
         gpio_set_dir(PICO_DEFAULT_LED_PIN, GPIO_OUT);
@@ -218,7 +217,7 @@ int main(void) {
         gpio_put(PICO_DEFAULT_LED_PIN, 0); sleep_ms(120);
     }
 
-    // 1. BOOTSEL模式检测 (RAM)
+    // 1. BOOTSEL模式检�?(RAM)
     current_mode = detect_mode();
     if (current_mode == MODE_NONE) {
         while (1) { __wfi(); }
@@ -235,7 +234,6 @@ int main(void) {
 
     multicore_launch_core1(core1_task);
     flash_store_init();
-    log_init();
     add_repeating_timer_ms(1, ms_timer_callback, NULL, &_ms_timer);
 
     reset_hid_report();
@@ -248,7 +246,7 @@ int main(void) {
         engine.body_in_ram = true;
         script_engine_load(&engine, msc_script_get_ptr(), msc_script_get_size());
     }
-    // MODE_CDC_MSC: no script loaded — just PC communication
+    // MODE_CDC_MSC: no script loaded �?just PC communication
 
     // 3. 启动 USB
     tusb_init();
@@ -257,21 +255,12 @@ int main(void) {
     uint32_t next_tick = time_us_32() + tick_us;
     uint32_t auto_start_delay = 0;
 
-    // 4. 主循环
+    // 4. 主循�?
     while (1) {
         tud_task();
         hid_task();
 
-        // Deferred boot log — wait ~50 tud_task() cycles for USB enumeration
-        {
-            static uint32_t log_tick = 50;
-            if (log_tick > 0) {
-                log_tick--;
-                if (log_tick == 0) log_event((uint8_t)current_mode);
-            }
-        }
-
-        // Runtime BOOTSEL long-press → reboot to re-enter mode selection
+        // Runtime BOOTSEL long-press �?reboot to re-enter mode selection
         if (check_bootsel_long_press()) {
             watchdog_reboot(0, 0, 10);
             while (1);

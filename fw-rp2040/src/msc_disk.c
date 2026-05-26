@@ -12,12 +12,7 @@
 
 static void _format_fat12(void)
 {
-    // Full erase MSC partition to clean any corrupted data (128 sectors)
-    for (uint32_t off = MSC_SCRIPT_OFFSET; off < MSC_SCRIPT_OFFSET + MSC_SCRIPT_SIZE; off += FLASH_SECTOR_SIZE) {
-        flash_raw_erase(off, FLASH_SECTOR_SIZE);
-    }
-
-    static uint8_t buf[FLASH_SECTOR_SIZE]; // 4096 B
+    static uint8_t buf[FLASH_SECTOR_SIZE]; // 4096 B, BSS
     memset(buf, 0, sizeof(buf));
 
     // Sector 0: Boot (0x000-0x1FF)
@@ -46,30 +41,34 @@ static void _format_fat12(void)
     // Sector 4-6: FAT2 at buf+0x800 (3*512=1536 B)
     buf[0x800]=0xF0; buf[0x801]=0xFF; buf[0x802]=0xFF;
 
-    // Sector 7: root dir start at buf+0xE00 → already 0x00 (empty)
+    // Sector 7: root dir start at buf+0xE00 → already 0x00
 
-    // Write boot + FAT1 + FAT2 + root-dir[0] in one 4KB-aligned write
-    flash_raw_erase(MSC_SCRIPT_OFFSET, FLASH_SECTOR_SIZE);
-    flash_raw_program(MSC_SCRIPT_OFFSET, buf, FLASH_SECTOR_SIZE);
+    // Write in 256-byte pages (flash_range_program base unit)
+    for (uint32_t page = 0; page < FLASH_SECTOR_SIZE; page += 256) {
+        uint32_t addr = MSC_SCRIPT_OFFSET + page;
+        if (page == 0) flash_raw_erase(addr, FLASH_SECTOR_SIZE);
+        flash_raw_program(addr, buf + page, 256);
+    }
 
-    // Zero root dir sectors 8-38 + first data sector 39 (4 flash sectors)
+    // Zero root dir sectors 8-39 (4 flash sectors)
     memset(buf, 0, sizeof(buf));
     for (int i = 1; i <= 4; i++) {
         uint32_t off = MSC_SCRIPT_OFFSET + i * FLASH_SECTOR_SIZE;
         flash_raw_erase(off, FLASH_SECTOR_SIZE);
-        flash_raw_program(off, buf, FLASH_SECTOR_SIZE);
+        for (uint32_t page = 0; page < FLASH_SECTOR_SIZE; page += 256) {
+            flash_raw_program(off + page, buf + page, 256);
+        }
     }
 
-    // Flush XIP cache so subsequent XIP reads see the new data
+    // Flush XIP cache
     xip_ctrl_hw->flush = 1;
     while (xip_ctrl_hw->flush) tight_loop_contents();
 }
 
 void msc_disk_init(void)
 {
-    // Auto-format if no valid FAT boot signature
-    uint16_t sig = *(const uint16_t*)(XIP_BASE + MSC_SCRIPT_OFFSET + 510);
-    if (sig != 0xAA55) _format_fat12();
+    const char* fstype = (const char*)(XIP_BASE + MSC_SCRIPT_OFFSET + 54);
+    if (memcmp(fstype, "FAT12   ", 8) != 0) _format_fat12();
 }
 
 int32_t msc_disk_read(uint32_t lba, uint32_t offset, void* buffer, uint32_t bufsize)

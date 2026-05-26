@@ -2,7 +2,6 @@
 # Usage: .\fw-rp2040\check.ps1
 
 $src = "fw-rp2040\src"
-$lib = "fw-rp2040\lib\littlefs"
 $fail = 0; $pass = 0
 
 function check($ok, $msg) {
@@ -17,7 +16,7 @@ $r1 = Select-String -Path "$src\*.h" -Pattern '__not_in_flash_func' -SimpleMatch
 check (-not $r1) "__not_in_flash_func in header declarations"
 
 # 2. __not_in_flash_func(static ...)
-$r2 = Select-String -Path "$src\*.c","$lib\*.c" -Pattern '__not_in_flash_func\s*\(\s*static\s' 2>$null
+$r2 = Select-String -Path "$src\*.c" -Pattern '__not_in_flash_func\s*\(\s*static\s' 2>$null
 check (-not $r2) "__not_in_flash_func(static ...)"
 
 # 3. extern current_mode
@@ -44,7 +43,7 @@ check $true "RAM function callers (linker catches)"
 
 # 8. #ifndef guards
 $noGuard = @()
-foreach ($h in Get-ChildItem "$src\*.h","$lib\*.h") {
+foreach ($h in Get-ChildItem "$src\*.h") {
   $name = $h.BaseName.ToUpper()
   $line = Select-String -Path $h.FullName -Pattern '#ifndef' -SimpleMatch 2>$null
   if (-not $line) { $noGuard += $h.Name }
