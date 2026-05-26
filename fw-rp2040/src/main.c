@@ -1,4 +1,4 @@
-/** NS Auto Painter — RP2040 Pico 固件 v0.02
+/** NS Auto Painter — RP2040 Pico 固件 v0.03
  *
  * BOOTSEL 按键模式切换 + USB 动态配置 + Flash 5区布局 + 脚本引擎
  *
@@ -87,7 +87,7 @@ static void cdc_process_cmd(const char* cmd) {
     if (strncmp(cmd, "INFO", 4) == 0) {
         char buf[128];
         snprintf(buf, sizeof(buf),
-            "INFO:NS_Auto_Paint_RP2040 v0.02\nMODE:%d\nCDC_SCRIPT:%s\nMSC_SCRIPT:%s\nHID:%s\nOK\n",
+            "INFO:NS_Auto_Paint_RP2040 v0.03\nMODE:%d\nCDC_SCRIPT:%s\nMSC_SCRIPT:%s\nHID:%s\nOK\n",
             current_mode,
             cdc_script_has_valid() ? "YES" : "NO",
             msc_script_has_valid() ? "YES" : "NO",

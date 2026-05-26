@@ -43,10 +43,11 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: fw-rp2040/build/*.uf2
-          name: firmware-v0.02
-          tag_name: v0.02
+          name: firmware-v0.03
+          tag_name: v0.03
           body: |
-            NS Auto Painter RP2040 v0.02
+            NS Auto Painter RP2040 v0.03
 
-            - 移除: LittleFS 日志系统
+            - 修复: FAT12格式化256B页写入
+            - 修复: 文件系统类型检测替代Boot签名
           token: ${{ secrets.GITHUB_TOKEN }}
