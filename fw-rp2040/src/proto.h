@@ -32,9 +32,6 @@ enum BootMode {
 #define MSC_SCRIPT_SIZE     (512 * 1024)
 #define MSC_SCRIPT_SECTORS  (MSC_SCRIPT_SIZE / 512)
 
-#define LOG_OFFSET          0x1C0000
-#define LOG_SIZE            (256 * 1024)
-
 // ================ Script Protocol Version ================
 #define SCRIPT_PROTO_VERSION 2
 

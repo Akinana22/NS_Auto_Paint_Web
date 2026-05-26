@@ -1,4 +1,4 @@
-/** NS Auto Painter — RP2040 Pico 固件 v0.01
+/** NS Auto Painter — RP2040 Pico 固件 v0.02
  *
  * BOOTSEL 按键模式切换 + USB 动态配置 + Flash 5区布局 + 脚本引擎
  *
@@ -23,7 +23,6 @@
 #include "flash_store.h"
 #include "script_engine.h"
 #include "msc_disk.h"
-#include "log.h"
 
 extern int current_mode;  // defined in usb_descriptors.c
 
@@ -88,7 +87,7 @@ static void cdc_process_cmd(const char* cmd) {
     if (strncmp(cmd, "INFO", 4) == 0) {
         char buf[128];
         snprintf(buf, sizeof(buf),
-            "INFO:NS_Auto_Paint_RP2040 v0.01\nMODE:%d\nCDC_SCRIPT:%s\nMSC_SCRIPT:%s\nHID:%s\nOK\n",
+            "INFO:NS_Auto_Paint_RP2040 v0.02\nMODE:%d\nCDC_SCRIPT:%s\nMSC_SCRIPT:%s\nHID:%s\nOK\n",
             current_mode,
             cdc_script_has_valid() ? "YES" : "NO",
             msc_script_has_valid() ? "YES" : "NO",
@@ -235,7 +234,6 @@ int main(void) {
 
     multicore_launch_core1(core1_task);
     flash_store_init();
-    log_init();
     add_repeating_timer_ms(1, ms_timer_callback, NULL, &_ms_timer);
 
     reset_hid_report();
@@ -261,15 +259,6 @@ int main(void) {
     while (1) {
         tud_task();
         hid_task();
-
-        // Deferred boot log — wait ~50 tud_task() cycles for USB enumeration
-        {
-            static uint32_t log_tick = 50;
-            if (log_tick > 0) {
-                log_tick--;
-                if (log_tick == 0) log_event((uint8_t)current_mode);
-            }
-        }
 
         // Runtime BOOTSEL long-press → reboot to re-enter mode selection
         if (check_bootsel_long_press()) {

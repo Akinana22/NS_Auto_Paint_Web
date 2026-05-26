@@ -4,7 +4,6 @@
 # Usage: bash fw-rp2040/check.sh
 
 SRC="fw-rp2040/src"
-LIB="fw-rp2040/lib/littlefs"
 fail=0; pass=0
 CHECK_NUM=0
 
@@ -30,7 +29,7 @@ else
 fi
 
 # 2. __not_in_flash_func(static ...)
-if grep -Ern '__not_in_flash_func\s*\(\s*static\s' $SRC $LIB 2>/dev/null | grep -q .; then
+if grep -Ern '__not_in_flash_func\s*\(\s*static\s' $SRC 2>/dev/null | grep -q .; then
   check 0 "__not_in_flash_func(static ...) — static inside macro"
 else
   check 1 "__not_in_flash_func(static ...) — static inside macro"
@@ -46,7 +45,7 @@ fi
 # 4. Unknown TinyUSB macros
 FOUND_MACRO=0
 for macro in TUSB_DESC_HID; do
-  if grep -rqw "$macro" $SRC $LIB; then
+  if grep -rqw "$macro" $SRC; then
     FOUND_MACRO=1
     echo "       Found: $macro"
   fi
@@ -69,7 +68,7 @@ check 1 "RAM function callers (linker catches)"
 
 # 8. #ifndef guards on all .h files
 MISSING_GUARD=""
-for h in $SRC/*.h $LIB/*.h; do
+for h in $SRC/*.h; do
   if ! grep -q '#ifndef' "$h" 2>/dev/null; then
     MISSING_GUARD="$MISSING_GUARD $(basename $h)"
   fi
