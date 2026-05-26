@@ -11,45 +11,48 @@
 
 static void _format_fat12(void)
 {
-    uint8_t boot[512];
-    memset(boot, 0, sizeof(boot));
+    uint8_t buf[FLASH_SECTOR_SIZE]; // 4096 B
+    memset(buf, 0, sizeof(buf));
 
-    // BPB
-    boot[0]=0xEB; boot[1]=0x3C; boot[2]=0x90;
-    memcpy(boot+3, "NSAUTO  ", 8);
-    boot[11]=0x00; boot[12]=0x02; // 512 bytes/sector
-    boot[13]=1;                    // 1 sector/cluster
-    boot[14]=1; boot[15]=0;       // 1 reserved sector
-    boot[16]=2;                    // 2 FATs
-    boot[17]=0x00; boot[18]=0x02; // 512 root entries
-    boot[19]=0x00; boot[20]=0x04; // 1024 sectors (16-bit)
-    boot[21]=0xF8;                 // media descriptor
-    boot[22]=3; boot[23]=0;       // 3 sectors/FAT
-    boot[24]=0x3F; boot[25]=0;    // 63 sectors/track
-    boot[26]=0xFF; boot[27]=0;    // 255 heads
-    // hidden sectors = 0
-    // total sectors 32-bit = 0 (using 16-bit field)
-    boot[36]=0x80;                 // drive number
-    boot[38]=0x29;                 // extended boot signature
-    boot[39]=0x78; boot[40]=0x56; boot[41]=0x34; boot[42]=0x12; // serial
-    memcpy(boot+43, "NSAUTO     ", 11);  // volume label
-    memcpy(boot+54, "FAT12   ", 8);       // FS type
-    boot[510]=0x55; boot[511]=0xAA;
+    // Sector 0: Boot (0x000-0x1FF)
+    buf[0]=0xEB; buf[1]=0x3C; buf[2]=0x90;
+    memcpy(buf+3, "NSAUTO  ", 8);
+    buf[11]=0x00; buf[12]=0x02;   // 512 bytes/sector
+    buf[13]=1;                     // 1 sector/cluster
+    buf[14]=1; buf[15]=0;         // 1 reserved sector
+    buf[16]=2;                     // 2 FATs
+    buf[17]=0x00; buf[18]=0x02;   // 512 root entries
+    buf[19]=0x00; buf[20]=0x04;   // 1024 sectors
+    buf[21]=0xF8;                  // media descriptor
+    buf[22]=3; buf[23]=0;         // 3 sectors/FAT
+    buf[24]=0x3F; buf[25]=0;      // 63 sectors/track
+    buf[26]=0xFF; buf[27]=0;      // 255 heads
+    buf[36]=0x80;                  // drive number
+    buf[38]=0x29;                  // extended boot signature
+    buf[39]=0x78; buf[40]=0x56; buf[41]=0x34; buf[42]=0x12;
+    memcpy(buf+43, "NSAUTO     ", 11);
+    memcpy(buf+54, "FAT12   ", 8);
+    buf[510]=0x55; buf[511]=0xAA;
 
+    // Sector 1-3: FAT1 at buf+0x200 (3*512=1536 B)
+    buf[0x200]=0xF0; buf[0x201]=0xFF; buf[0x202]=0xFF;
+
+    // Sector 4-6: FAT2 at buf+0x800 (3*512=1536 B)
+    buf[0x800]=0xF0; buf[0x801]=0xFF; buf[0x802]=0xFF;
+
+    // Sector 7: root dir start at buf+0xE00 → already 0x00 (empty)
+
+    // Write boot + FAT1 + FAT2 + root-dir[0] in one 4KB-aligned write
     flash_raw_erase(MSC_SCRIPT_OFFSET, FLASH_SECTOR_SIZE);
-    flash_raw_program(MSC_SCRIPT_OFFSET, boot, FLASH_SECTOR_SIZE);
+    flash_raw_program(MSC_SCRIPT_OFFSET, buf, FLASH_SECTOR_SIZE);
 
-    // FAT1 + FAT2: first 3 bytes = 0xF0 0xFF 0xFF, rest zeros
-    uint8_t fat[FLASH_SECTOR_SIZE];
-    memset(fat, 0, sizeof(fat));
-    fat[0]=0xF0; fat[1]=0xFF; fat[2]=0xFF;
-    uint32_t fat_base = MSC_SCRIPT_OFFSET + 512;
-    flash_raw_erase(fat_base, FLASH_SECTOR_SIZE);
-    flash_raw_program(fat_base, fat, FLASH_SECTOR_SIZE);
-    // FAT2 copy (3 sectors later = offset 3*512 from fat_base)
-    uint32_t fat2_base = fat_base + 3 * 512;
-    flash_raw_erase(fat2_base, FLASH_SECTOR_SIZE);
-    flash_raw_program(fat2_base, fat, FLASH_SECTOR_SIZE);
+    // Zero root dir sectors 8-38 + first data sector 39 (4 flash sectors)
+    memset(buf, 0, sizeof(buf));
+    for (int i = 1; i <= 4; i++) {
+        uint32_t off = MSC_SCRIPT_OFFSET + i * FLASH_SECTOR_SIZE;
+        flash_raw_erase(off, FLASH_SECTOR_SIZE);
+        flash_raw_program(off, buf, FLASH_SECTOR_SIZE);
+    }
 }
 
 void msc_disk_init(void)

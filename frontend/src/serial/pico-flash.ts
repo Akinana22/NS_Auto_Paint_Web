@@ -27,7 +27,7 @@ export class PicoSerial {
 
   async connect(): Promise<PicoInfo> {
     this.port = await navigator.serial.requestPort({
-      filters: [{ usbVendorId: 0x0F0D, usbProductId: 0x0092 }], // HORI POKKEN CONTROLLER
+      filters: [{ usbVendorId: 0x0F0D }], // HORI CO.,LTD.
     });
     await this.port.open({ baudRate: 115200 });
     this.reader = this.port.readable!.getReader();
