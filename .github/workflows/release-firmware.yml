@@ -43,14 +43,13 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: fw-rp2040/build/*.uf2
-          name: firmware-v0.01
-          tag_name: v0.01
+          name: firmware-v0.02
+          tag_name: v0.02
           body: |
-            NS Auto Painter RP2040 v0.01
+            NS Auto Painter RP2040 v0.02
 
-            - BOOTSEL 按键模式切换 (短按/双击/长按)
-            - USB 动态配置 (HID only / CDC+MSC)
-            - Flash 5区布局 (固件/备用/CDC脚本/MSC脚本/日志)
-            - 脚本引擎 + CDC/MSC 双通道脚本更新
-            - LittleFS 日志系统
+            - BOOTSEL button mode switching (short/double/long press)
+            - USB dynamic config (HID only / CDC+MSC)
+            - Flash 4-zone layout (firmware/reserved/CDC script/MSC script)
+            - Script engine with CDC/MSC dual-channel update
           token: ${{ secrets.GITHUB_TOKEN }}
