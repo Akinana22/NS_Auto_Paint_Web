@@ -59,7 +59,7 @@ function parseMd(src: string) {
       const header = rows[0];
       const body = rows.filter((_, idx) => idx > 0 && !/^[-:\s|]+$/.test(tableLines[idx]));
       pushNode(
-        <table key={i - tableLines.length} style={{ borderCollapse: 'collapse', width: '100%', maxWidth: 600, fontSize: 13 }}>
+        <table key={i - tableLines.length} style={{ borderCollapse: 'collapse', width: '100%', maxWidth: '100%', fontSize: 13 }}>
           <thead>
             <tr style={{ borderBottom: '1px solid var(--border)' }}>
               {header.map((h, hi) => <th key={hi} style={{ textAlign: 'left', padding: '4px 8px' }}>{h}</th>)}

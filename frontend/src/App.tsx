@@ -25,7 +25,7 @@ export default function App() {
       <nav className="top-nav">
         <NavLink to="/" end>首页</NavLink>
         <NavLink to="/tomodachi">朋友收集</NavLink>
-        <NavLink to="/splatoon">斯普拉顿</NavLink>
+        <NavLink to="/splatoon">斯普拉遁</NavLink>
       </nav>
       <main className="main-content">
         <Routes>
