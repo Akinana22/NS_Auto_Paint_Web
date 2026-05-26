@@ -12,6 +12,11 @@
 
 static void _format_fat12(void)
 {
+    // Full erase MSC partition to clean any corrupted data (128 sectors)
+    for (uint32_t off = MSC_SCRIPT_OFFSET; off < MSC_SCRIPT_OFFSET + MSC_SCRIPT_SIZE; off += FLASH_SECTOR_SIZE) {
+        flash_raw_erase(off, FLASH_SECTOR_SIZE);
+    }
+
     static uint8_t buf[FLASH_SECTOR_SIZE]; // 4096 B
     memset(buf, 0, sizeof(buf));
 
