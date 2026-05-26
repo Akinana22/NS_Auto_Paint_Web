@@ -24,6 +24,7 @@ export class PicoSerial {
   private port: SerialPort | null = null;
   private reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
   private writer: WritableStreamDefaultWriter<Uint8Array> | null = null;
+  private lineBuf: string = '';
 
   async connect(): Promise<PicoInfo> {
     this.port = await navigator.serial.requestPort({
@@ -43,6 +44,7 @@ export class PicoSerial {
     this.port = null;
     this.reader = null;
     this.writer = null;
+    this.lineBuf = '';
   }
 
   get connected(): boolean {
@@ -55,18 +57,17 @@ export class PicoSerial {
   }
 
   private async readLine(): Promise<string> {
-    let buf = '';
     const decoder = new TextDecoder();
     while (true) {
+      const nl = this.lineBuf.indexOf('\n');
+      if (nl >= 0) {
+        const line = this.lineBuf.substring(0, nl).trim();
+        this.lineBuf = this.lineBuf.substring(nl + 1);
+        return line;
+      }
       const { value, done } = await this.reader!.read();
       if (done) throw new Error('Device disconnected');
-      const text = decoder.decode(value, { stream: true });
-      buf += text;
-      const nl = buf.indexOf('\n');
-      if (nl >= 0) {
-        const line = buf.substring(0, nl).trim();
-        // Save remaining for next read
-        return line;
+      this.lineBuf += decoder.decode(value, { stream: true });
       }
     }
   }

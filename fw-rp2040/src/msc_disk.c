@@ -7,6 +7,7 @@
 #include "pico/stdlib.h"
 #include "flash_store.h"
 #include "hardware/flash.h"
+#include "hardware/structs/xip_ctrl.h"
 #include <string.h>
 
 static void _format_fat12(void)
@@ -53,6 +54,10 @@ static void _format_fat12(void)
         flash_raw_erase(off, FLASH_SECTOR_SIZE);
         flash_raw_program(off, buf, FLASH_SECTOR_SIZE);
     }
+
+    // Flush XIP cache so subsequent XIP reads see the new data
+    xip_ctrl_hw->flush = 1;
+    while (xip_ctrl_hw->flush) tight_loop_contents();
 }
 
 void msc_disk_init(void)
