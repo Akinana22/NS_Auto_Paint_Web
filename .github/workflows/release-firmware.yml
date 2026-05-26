@@ -18,7 +18,8 @@ jobs:
 
       - name: Install Pico SDK dependencies
         run: |
-          sudo apt-get update
+          sudo rm -f /etc/apt/sources.list.d/google-chrome*
+          sudo apt-get update -qq
           sudo apt-get install -y cmake gcc-arm-none-eabi libnewlib-arm-none-eabi build-essential
 
       - name: Clone Pico SDK
@@ -42,10 +43,10 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: fw-rp2040/build/*.uf2
-          name: firmware-v0.1
-          tag_name: v0.1
+          name: firmware-v0.01
+          tag_name: v0.01
           body: |
-            NS Auto Painter RP2040 v0.1
+            NS Auto Painter RP2040 v0.01
 
             - BOOTSEL 按键模式切换 (短按/双击/长按)
             - USB 动态配置 (HID only / CDC+MSC)
