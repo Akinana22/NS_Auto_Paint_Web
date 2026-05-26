@@ -140,7 +140,7 @@ export default function HomePage() {
     <div className="page-wrapper">
       <div className="page-box">
         <div className="page-group">
-          <div className="panel page-col-full" style={{ overflowY: 'auto', lineHeight: 1.9, fontSize: 14 }}>
+          <div className="panel page-col-full" style={{ overflowY: 'auto', lineHeight: 1.9, fontSize: 14, wordBreak: 'break-word' }}>
             {content}
           </div>
         </div>
