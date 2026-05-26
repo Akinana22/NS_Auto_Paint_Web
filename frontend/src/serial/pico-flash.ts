@@ -68,7 +68,6 @@ export class PicoSerial {
       const { value, done } = await this.reader!.read();
       if (done) throw new Error('Device disconnected');
       this.lineBuf += decoder.decode(value, { stream: true });
-      }
     }
   }
 
