@@ -76,7 +76,7 @@ static void hid_task(void) {
     report[3] = hid_report.lx; report[4] = hid_report.ly;
     report[5] = hid_report.rx; report[6] = hid_report.ry;
     report[7] = hid_report.vendor;
-    tud_hid_report(0, report, sizeof(report));
+    tud_hid_report(1, report, sizeof(report));
 }
 
 // ==== CDC ====
