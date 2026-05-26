@@ -53,13 +53,12 @@ for macro in TUSB_DESC_HID; do
 done
 [ "$FOUND_MACRO" = "0" ] && check 1 "Unknown TinyUSB macros" || check 0 "Unknown TinyUSB macros"
 
-# 5. Write buffer capacity
-CDC_BUF=$(grep -Eo 'cdc_upload_buf\[[0-9]+' $SRC/main.c | grep -Eo '[0-9]+')
-FLASH_BUF=$(grep -Eo 'uint8_t buf\[[0-9]+' $SRC/flash_store.c | grep -Eo '[0-9]+' | tail -1)
-if [ -n "$CDC_BUF" ] && [ -n "$FLASH_BUF" ] && [ "$FLASH_BUF" -ge "$CDC_BUF" ] 2>/dev/null; then
-  check 1 "Write buffers: flash(${FLASH_BUF}B) >= cdc_upload(${CDC_BUF}B)"
+# 5. CDC page buffer size (must be 256 = FLASH_PAGE_SIZE)
+PAGE_BUF=$(grep -Eo 'cdc_page_buf\[[0-9]+' $SRC/main.c | grep -Eo '[0-9]+')
+if [ -n "$PAGE_BUF" ] && [ "$PAGE_BUF" -eq 256 ] 2>/dev/null; then
+  check 1 "cdc_page_buf == 256 (flash page size)"
 else
-  check 0 "Write buffers: flash(${FLASH_BUF}B) >= cdc_upload(${CDC_BUF}B)"
+  check 0 "cdc_page_buf == 256 (flash page size): got ${PAGE_BUF:-none}"
 fi
 
 # 6. #include usage

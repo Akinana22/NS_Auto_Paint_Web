@@ -19,7 +19,6 @@ uint32_t cdc_script_get_size(void);
 const script_header_t* cdc_script_get_header(void);
 const uint8_t* cdc_script_get_ptr(void);
 bool     cdc_script_erase(void);
-// bool  cdc_script_write(const uint8_t* data, uint32_t size, uint32_t checksum); // superseded by streaming
 
 // ---- MSC Script (FAT partition exposed to host) ----
 // The host formats and manages this. We just provide read/write at sector level.

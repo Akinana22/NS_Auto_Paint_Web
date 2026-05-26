@@ -103,27 +103,6 @@ bool cdc_script_erase(void)
     return true;
 }
 
-// cdc_script_write() superseded by CDC streaming upload in main.c
-#if 0
-bool cdc_script_write(const uint8_t* data, uint32_t size, uint32_t checksum)
-{
-    if (size > CDC_SCRIPT_SIZE - SCRIPT_HEADER_SECTOR) return false;
-
-    script_header_t hdr = { SCRIPT_MAGIC, 1, size, checksum, 0, 0 };
-    uint32_t total = SCRIPT_HEADER_SECTOR + size;
-
-    static uint8_t buf[32768];
-    if (total > sizeof(buf)) return false;
-    memset(buf, 0xFF, sizeof(buf));
-    memcpy(buf, &hdr, SCRIPT_HEADER_SIZE);
-    memcpy(buf + SCRIPT_HEADER_SECTOR, data, size);
-
-    flash_raw_erase(CDC_SCRIPT_OFFSET, total);
-    flash_raw_program(CDC_SCRIPT_OFFSET, buf, total);
-    return true;
-}
-#endif
-
 // ============ MSC Script Partition ============
 
 bool msc_script_has_valid(void)

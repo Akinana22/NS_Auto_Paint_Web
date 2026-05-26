@@ -33,11 +33,10 @@ foreach ($m in $badMacros) {
 }
 check ($found.Count -eq 0) "Unknown TinyUSB macros ($($found -join ', '))"
 
-# 5. Write buffer capacity
-$cdc = (Select-String -Path "$src\main.c" -Pattern 'cdc_upload_buf\[(\d+)\]').Matches.Groups[1].Value
-$fs  = (Select-String -Path "$src\flash_store.c" -Pattern 'uint8_t buf\[(\d+)\]').Matches.Groups[1].Value
-if ($cdc -and $fs) { check ([int]$fs -ge [int]$cdc) "Write buffers: flash(${fs}B) >= cdc_upload(${cdc}B)" }
-else { check $false "Write buffers: could not parse" }
+# 5. CDC page buffer size (must be 256 = FLASH_PAGE_SIZE for flash_range_program)
+$page = (Select-String -Path "$src\main.c" -Pattern 'cdc_page_buf\[(\d+)\]').Matches.Groups[1].Value
+if ($page) { check ([int]$page -eq 256) "cdc_page_buf == 256 (flash page size)" }
+else { check $false "cdc_page_buf size: could not parse" }
 
 # 6-7. Skipped
 check $true "#include analysis (compiler catches)"
