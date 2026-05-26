@@ -62,9 +62,9 @@ static void _format_fat12(void)
 
 void msc_disk_init(void)
 {
-    // Auto-format if partition is blank (first byte 0xFF)
-    uint8_t first = *(const uint8_t*)(XIP_BASE + MSC_SCRIPT_OFFSET);
-    if (first == 0xFF) _format_fat12();
+    // Auto-format if no valid FAT boot signature
+    uint16_t sig = *(const uint16_t*)(XIP_BASE + MSC_SCRIPT_OFFSET + 510);
+    if (sig != 0xAA55) _format_fat12();
 }
 
 int32_t msc_disk_read(uint32_t lba, uint32_t offset, void* buffer, uint32_t bufsize)

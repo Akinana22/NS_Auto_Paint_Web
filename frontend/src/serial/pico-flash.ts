@@ -27,6 +27,9 @@ export class PicoSerial {
   private lineBuf: string = '';
 
   async connect(): Promise<PicoInfo> {
+    // Forget previously paired ports to force a fresh selection
+    for (const p of await navigator.serial.getPorts()) { try { await p.forget(); } catch {} }
+
     this.port = await navigator.serial.requestPort({
       filters: [{ usbVendorId: 0x0F0D }], // HORI CO.,LTD.
     });
@@ -115,8 +118,29 @@ export class PicoSerial {
     await this.readResponse();
   }
 
+  private async drain(): Promise<void> {
+    this.lineBuf = '';
+    // Read and discard any buffered data with a short timeout
+    let timeoutId: ReturnType<typeof setTimeout>;
+    const timeout = new Promise<void>(r => { timeoutId = setTimeout(r, 200); });
+    try {
+      while (true) {
+        const result = await Promise.race([
+          this.reader!.read().then(v => ({ type: 'data' as const, value: v })),
+          timeout.then(() => ({ type: 'timeout' as const })),
+        ]);
+        if (result.type === 'timeout') break;
+        if (result.value.done) break;
+      }
+    } catch {}
+    clearTimeout(timeoutId!);
+  }
+
   /** 将二进制脚本数据写入 Pico Flash */
   async writeScript(data: Uint8Array, crc32: number): Promise<void> {
+    // Drain any stale data before starting
+    try { await this.drain(); } catch {}
+
     // Step 1: WRITE
     await this.sendCmd(`WRITE:${data.length.toString(16)}`);
     await this.readResponse(); // OK:READY_FOR_DATA

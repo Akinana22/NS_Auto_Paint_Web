@@ -59,7 +59,7 @@
     /* Output (mirror) */ \
     HID_USAGE_PAGE    ( HID_USAGE_PAGE_DESKTOP                 ) ,\
     HID_USAGE_N       ( 0x2611, 2                              ) ,\
-    HID_REPORT_COUNT  ( 1                                      ) ,\
+    HID_REPORT_COUNT  ( 8                                      ) ,\
     HID_REPORT_SIZE   ( 8                                      ) ,\
     HID_OUTPUT        ( HID_DATA | HID_VARIABLE | HID_ABSOLUTE | HID_WRAP_NO | HID_LINEAR | HID_PREFERRED_STATE | HID_NULL_STATE | HID_NONLINEAR | HID_VOLATILE ) ,\
   HID_COLLECTION_END
